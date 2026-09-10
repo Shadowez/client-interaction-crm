@@ -20,8 +20,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           package_version="$(node -p "require('./package.json').version")"
           test "${version}" = "${package_version}"
-          git archive --format=zip --prefix=app/ HEAD -o "client-interaction-crm-app-v${version}.zip"
-          sha256sum "client-interaction-crm-app-v${version}.zip" > "client-interaction-crm-app-v${version}.zip.sha256"
+          bash scripts/package-installer-payload.sh .
       - uses: actions/upload-artifact@v6
         with:
           name: application-payload

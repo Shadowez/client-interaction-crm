@@ -27,3 +27,4 @@
 /installer export-ignore
 /.github export-ignore
 /.gitignore export-ignore
+/scripts/package-installer-payload.sh export-ignore

@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -59,6 +60,78 @@ func TestExtractZipRejectsTraversal(t *testing.T) {
 	_ = f.Close()
 	if err := extractZip(archive, t.TempDir()); err == nil {
 		t.Fatal("expected traversal rejection")
+	}
+}
+
+func TestLocalPayloadValid(t *testing.T) {
+	payload, checksum := testPayload(t, map[string]string{"app/package.json": `{}`})
+	if err := os.WriteFile(payload+".sha256", []byte(checksum+"  "+filepath.Base(payload)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CRM_PAYLOAD_FILE", payload)
+	t.Setenv("CRM_PAYLOAD_SHA256", "")
+	a := testPayloadApp(t)
+	if err := a.preparePayload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(a.appDir, "package.json")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLocalPayloadMissingFile(t *testing.T) {
+	t.Setenv("CRM_PAYLOAD_FILE", filepath.Join(t.TempDir(), "missing.zip"))
+	t.Setenv("CRM_PAYLOAD_SHA256", strings.Repeat("0", 64))
+	if err := testPayloadApp(t).preparePayload(context.Background()); err == nil || !strings.Contains(err.Error(), "CRM_PAYLOAD_FILE") {
+		t.Fatalf("expected missing local payload error, got %v", err)
+	}
+}
+
+func TestLocalPayloadChecksumMismatch(t *testing.T) {
+	payload, _ := testPayload(t, map[string]string{"app/package.json": `{}`})
+	t.Setenv("CRM_PAYLOAD_FILE", payload)
+	t.Setenv("CRM_PAYLOAD_SHA256", strings.Repeat("0", 64))
+	if err := testPayloadApp(t).preparePayload(context.Background()); err == nil || !strings.Contains(err.Error(), "SHA-256 mismatch") {
+		t.Fatalf("expected checksum mismatch, got %v", err)
+	}
+}
+
+func TestLocalPayloadMalformedArchive(t *testing.T) {
+	payload := filepath.Join(t.TempDir(), "client-interaction-crm-app-v1.1.0.zip")
+	if err := os.WriteFile(payload, []byte("not a ZIP"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checksum, err := sha256File(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CRM_PAYLOAD_FILE", payload)
+	t.Setenv("CRM_PAYLOAD_SHA256", checksum)
+	if err := testPayloadApp(t).preparePayload(context.Background()); err == nil {
+		t.Fatal("expected malformed archive error")
+	}
+}
+
+func TestLocalPayloadTraversalAttempt(t *testing.T) {
+	payload, checksum := testPayload(t, map[string]string{"app/package.json": `{}`, "../outside": "bad"})
+	t.Setenv("CRM_PAYLOAD_FILE", payload)
+	t.Setenv("CRM_PAYLOAD_SHA256", checksum)
+	if err := testPayloadApp(t).preparePayload(context.Background()); err == nil || !strings.Contains(err.Error(), "unsafe archive path") {
+		t.Fatalf("expected traversal rejection, got %v", err)
+	}
+}
+
+func TestGitHubReleasePayloadIsDefault(t *testing.T) {
+	t.Setenv("CRM_PAYLOAD_FILE", "")
+	t.Setenv("CRM_PAYLOAD_SHA256", strings.Repeat("f", 64))
+	if _, enabled := localPayloadOverride(os.Getenv); enabled {
+		t.Fatal("local override activated without CRM_PAYLOAD_FILE")
+	}
+	asset := "client-interaction-crm-app-v1.1.0.zip"
+	payloadURL, checksumURL := releasePayloadURLs("1.1.0", asset)
+	want := "https://github.com/Shadowez/client-interaction-crm/releases/download/v1.1.0/" + asset
+	if payloadURL != want || checksumURL != want+".sha256" {
+		t.Fatalf("immutable release URLs changed: %q %q", payloadURL, checksumURL)
 	}
 }
 
@@ -140,3 +213,39 @@ func bufioNew(value string) *bufio.Reader { return bufio.NewReader(strings.NewRe
 type ioDiscard struct{}
 
 func (ioDiscard) Write(p []byte) (int, error) { return len(p), nil }
+
+func testPayloadApp(t *testing.T) *app {
+	t.Helper()
+	root := t.TempDir()
+	return &app{out: ioDiscard{}, root: root, appDir: filepath.Join(root, "app")}
+}
+
+func testPayload(t *testing.T, entries map[string]string) (string, string) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "client-interaction-crm-app-v1.1.0.zip")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := zip.NewWriter(f)
+	for name, content := range entries {
+		entry, err := w.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	checksum, err := sha256File(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path, checksum
+}

@@ -15,6 +15,42 @@ The launcher pins Supabase CLI `2.117.0` and Vercel CLI `59.15.1`. Their officia
 
 The workflow does not create a tag or GitHub Release.
 
+## Maintainer-only local payload override
+
+This path exists only for acceptance testing before release assets are published. It is not an end-user installation method. Normal launcher runs remain pinned to the immutable matching GitHub Release.
+
+From a clean, committed checkout, create the exact ZIP and checksum produced by the release workflow:
+
+```bash
+bash scripts/package-installer-payload.sh
+```
+
+Build the Linux launcher (Go 1.22 or newer is required only for this maintainer build):
+
+```bash
+mkdir -p installer/dist
+cd installer
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=1.1.0" -o dist/client-interaction-crm-setup-linux-amd64 .
+cd ..
+```
+
+Run acceptance testing with the explicit absolute local path:
+
+```bash
+CRM_PAYLOAD_FILE="$(realpath installer/dist/client-interaction-crm-app-v1.1.0.zip)" \
+  ./installer/dist/client-interaction-crm-setup-linux-amd64
+```
+
+The launcher reads the adjacent `.zip.sha256` by default. To supply the expected checksum explicitly instead:
+
+```bash
+CRM_PAYLOAD_FILE="$(realpath installer/dist/client-interaction-crm-app-v1.1.0.zip)" \
+CRM_PAYLOAD_SHA256="$(sha256sum installer/dist/client-interaction-crm-app-v1.1.0.zip | cut -d ' ' -f 1)" \
+  ./installer/dist/client-interaction-crm-setup-linux-amd64
+```
+
+`CRM_PAYLOAD_FILE` must be an absolute path to a regular local file. A relative path, absent checksum, malformed archive, checksum mismatch, or archive traversal attempt stops setup before installation. `CRM_PAYLOAD_SHA256` alone does not activate the override.
+
 ## Linux manual acceptance test
 
 Use an x64 Linux account with no relevant CLI login. A preinstalled Node is optional and Git is not required.

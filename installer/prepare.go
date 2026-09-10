@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,24 +42,8 @@ func (a *app) preparePayload(ctx context.Context) error {
 	}
 	defer os.RemoveAll(temporary)
 	asset := fmt.Sprintf("client-interaction-crm-app-v%s.zip", version)
-	base := fmt.Sprintf("https://github.com/Shadowez/client-interaction-crm/releases/download/v%s/", version)
 	archivePath := filepath.Join(temporary, asset)
-	checksumPath := archivePath + ".sha256"
-	if err := download(ctx, base+asset, archivePath); err != nil {
-		return fmt.Errorf("download versioned CRM payload: %w", err)
-	}
-	if err := download(ctx, base+asset+".sha256", checksumPath); err != nil {
-		return fmt.Errorf("download CRM checksum: %w", err)
-	}
-	data, err := os.ReadFile(checksumPath)
-	if err != nil {
-		return err
-	}
-	expected, err := expectedChecksum(string(data), asset)
-	if err != nil {
-		return err
-	}
-	if err := verifyChecksum(archivePath, expected); err != nil {
+	if err := a.acquirePayload(ctx, asset, archivePath); err != nil {
 		return err
 	}
 	staging := filepath.Join(temporary, "extract")
@@ -76,6 +61,72 @@ func (a *app) preparePayload(ctx context.Context) error {
 		return err
 	}
 	return os.WriteFile(marker, []byte(version+"\n"), 0o644)
+}
+
+func releasePayloadURLs(releaseVersion, asset string) (string, string) {
+	base := fmt.Sprintf("https://github.com/Shadowez/client-interaction-crm/releases/download/v%s/", releaseVersion)
+	return base + asset, base + asset + ".sha256"
+}
+
+func localPayloadOverride(getenv func(string) string) (string, bool) {
+	path := strings.TrimSpace(getenv("CRM_PAYLOAD_FILE"))
+	return path, path != ""
+}
+
+func (a *app) acquirePayload(ctx context.Context, asset, destination string) error {
+	if localPath, enabled := localPayloadOverride(os.Getenv); enabled {
+		fmt.Fprintln(a.out, "Maintainer testing: using the explicit local payload override.")
+		log.Print("maintainer local payload override enabled")
+		if !filepath.IsAbs(localPath) {
+			return errorsNew("CRM_PAYLOAD_FILE must be an absolute local file path")
+		}
+		info, err := os.Stat(localPath)
+		if err != nil {
+			return fmt.Errorf("open CRM_PAYLOAD_FILE: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			return errorsNew("CRM_PAYLOAD_FILE must identify a regular file")
+		}
+		if err := copyLocalFile(localPath, destination); err != nil {
+			return fmt.Errorf("copy local CRM payload: %w", err)
+		}
+		expected := strings.TrimSpace(os.Getenv("CRM_PAYLOAD_SHA256"))
+		if expected == "" {
+			checksumPath := localPath + ".sha256"
+			data, err := os.ReadFile(checksumPath)
+			if err != nil {
+				return fmt.Errorf("read local payload checksum %s: %w", checksumPath, err)
+			}
+			expected, err = expectedChecksum(string(data), filepath.Base(localPath))
+			if err != nil {
+				return err
+			}
+		} else if !validSHA256(expected) {
+			return errorsNew("CRM_PAYLOAD_SHA256 must be exactly 64 hexadecimal characters")
+		}
+		if err := verifyChecksum(destination, expected); err != nil {
+			return fmt.Errorf("verify local CRM payload: %w", err)
+		}
+		return nil
+	}
+
+	payloadURL, checksumURL := releasePayloadURLs(version, asset)
+	checksumPath := destination + ".sha256"
+	if err := download(ctx, payloadURL, destination); err != nil {
+		return fmt.Errorf("download versioned CRM payload: %w", err)
+	}
+	if err := download(ctx, checksumURL, checksumPath); err != nil {
+		return fmt.Errorf("download CRM checksum: %w", err)
+	}
+	data, err := os.ReadFile(checksumPath)
+	if err != nil {
+		return err
+	}
+	expected, err := expectedChecksum(string(data), asset)
+	if err != nil {
+		return err
+	}
+	return verifyChecksum(destination, expected)
 }
 
 func (a *app) prepareNode(ctx context.Context) error {
