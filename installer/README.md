@@ -4,6 +4,10 @@ The launcher is a thin, dependency-free Go executable. It downloads the matching
 
 The launcher pins Supabase CLI `2.117.0` and Vercel CLI `59.15.1`. Their official browser authentication and user-level credential stores are used. The application receives only its Supabase URL and browser-safe publishable key. The first CRM user is deliberately created/invited in Supabase Dashboard.
 
+For a new Supabase project, the launcher reads the authenticated user's organizations through JSON CLI output. It selects the only organization automatically or presents a numbered choice. If none exists, it opens the organization Dashboard and refreshes after confirmation. It then presents the current specific Supabase project regions by human-readable location; the list was verified against the [official Supabase region documentation](https://supabase.com/docs/guides/platform/regions) for the `v1.1.0` launcher.
+
+The launcher generates a strong database password, shows it once for the user to save in a password manager, and retains it only in memory. Supabase project creation currently requires `--db-password`, so the value is necessarily present in that child process's argument list for the duration of that one official CLI call; launcher command logging redacts it. Later link and migration commands receive it through the documented `SUPABASE_DB_PASSWORD` environment variable. It is never written to `.crm-state.json`, `.env.local`, application source, or launcher logs.
+
 ## Maintainer release procedure
 
 1. Ensure `package.json` and the intended tag use the same numeric version.

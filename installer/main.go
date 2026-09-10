@@ -25,19 +25,22 @@ const (
 var version = defaultVersion
 
 type app struct {
-	in       *bufio.Reader
-	out      io.Writer
-	verbose  bool
-	logFile  *os.File
-	root     string
-	appDir   string
-	runtime  string
-	node     string
-	npm      string
-	npx      string
-	company  string
-	project  project
-	finalURL string
+	in               *bufio.Reader
+	out              io.Writer
+	verbose          bool
+	logFile          *os.File
+	root             string
+	appDir           string
+	runtime          string
+	node             string
+	npm              string
+	npx              string
+	company          string
+	project          project
+	databasePassword string
+	finalURL         string
+	supabaseRun      func(context.Context, []string, commandOptions) (string, error)
+	browserOpen      func(context.Context, string) error
 }
 
 func main() {

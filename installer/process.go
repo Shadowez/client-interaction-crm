@@ -58,13 +58,19 @@ func (a *app) command(ctx context.Context, executable string, args []string, opt
 
 func redactArgs(args []string) []string {
 	result := append([]string(nil), args...)
+	redactNext := false
 	for i, value := range result {
+		if redactNext {
+			result[i] = "<redacted>"
+			redactNext = false
+			continue
+		}
 		upper := strings.ToUpper(value)
 		if strings.Contains(upper, "PASSWORD") || strings.Contains(upper, "TOKEN") || strings.Contains(upper, "KEY=") {
 			if before, _, ok := strings.Cut(value, "="); ok {
 				result[i] = before + "=<redacted>"
 			} else {
-				result[i] = "<redacted>"
+				redactNext = true
 			}
 		}
 	}

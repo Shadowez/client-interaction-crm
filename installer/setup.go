@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 )
 
@@ -107,7 +106,7 @@ func (a *app) connectSupabase(ctx context.Context) error {
 	projects, err := a.projects(ctx)
 	if err != nil {
 		fmt.Fprintln(a.out, "Starting the official Supabase browser sign-in…")
-		if _, loginErr := a.npxCommand(ctx, "supabase@"+supabaseCLI, []string{"login"}, true, false); loginErr != nil {
+		if _, loginErr := a.runSupabase(ctx, []string{"login"}, commandOptions{interactive: true}); loginErr != nil {
 			return fmt.Errorf("Supabase sign-in did not complete: %w", loginErr)
 		}
 		projects, err = a.projects(ctx)
@@ -160,26 +159,25 @@ func (a *app) connectSupabase(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(a.out, "The official Supabase CLI may ask you to choose an organization, region, and a database password.")
-	if _, err := a.npxCommand(ctx, "supabase@"+supabaseCLI, []string{"projects", "create", name}, true, false); err != nil {
-		return err
-	}
-	refreshed, err := a.projects(ctx)
-	if err != nil {
-		return err
-	}
-	sort.SliceStable(refreshed, func(i, j int) bool { return refreshed[i].CreatedAt > refreshed[j].CreatedAt })
-	for _, p := range refreshed {
-		if p.Name == name {
-			a.project = p
+	for _, candidate := range projects {
+		if candidate.Name == name && candidate.reference() != "" {
+			fmt.Fprintf(a.out, "A Supabase project named %q already exists. To prevent a duplicate, setup will not create another silently.\n", name)
+			useMatch, confirmErr := a.confirm("Use this existing project after confirming it is dedicated to this CRM", false)
+			if confirmErr != nil {
+				return confirmErr
+			}
+			if !useMatch {
+				return errorsNew("choose a different project name or explicitly select the existing dedicated project")
+			}
+			a.project = candidate
 			return a.saveState()
 		}
 	}
-	return fmt.Errorf("new Supabase project %q was not found after creation", name)
+	return a.provisionNewProject(ctx, name)
 }
 
 func (a *app) projects(ctx context.Context) ([]project, error) {
-	out, err := a.npxCommand(ctx, "supabase@"+supabaseCLI, []string{"projects", "list", "-o", "json"}, false, true)
+	out, err := a.runSupabase(ctx, []string{"projects", "list", "--output", "json"}, commandOptions{capture: true})
 	if err != nil {
 		return nil, err
 	}
@@ -214,12 +212,16 @@ func (a *app) configureSupabase(ctx context.Context) error {
 		{"db", "push", "--linked", "--skip-vault"},
 		{"config", "push", "--project-ref", ref},
 	}
+	databaseEnv := []string{}
+	if a.databasePassword != "" {
+		databaseEnv = append(databaseEnv, "SUPABASE_DB_PASSWORD="+a.databasePassword)
+	}
 	for _, args := range commands {
-		if _, err := a.npxCommand(ctx, "supabase@"+supabaseCLI, args, true, false); err != nil {
+		if _, err := a.runSupabase(ctx, args, commandOptions{interactive: true, env: databaseEnv}); err != nil {
 			return err
 		}
 	}
-	out, err := a.npxSensitiveCommand(ctx, "supabase@"+supabaseCLI, []string{"projects", "api-keys", "--project-ref", ref, "-o", "json"})
+	out, err := a.runSupabase(ctx, []string{"projects", "api-keys", "--project-ref", ref, "--output", "json"}, commandOptions{capture: true, sensitive: true})
 	if err != nil {
 		return err
 	}
@@ -312,15 +314,15 @@ func (a *app) deploy(ctx context.Context) error {
 	if err := writeAuthConfig(filepath.Join(a.appDir, "supabase", "config.toml"), a.finalURL); err != nil {
 		return err
 	}
-	if _, err := a.npxCommand(ctx, "supabase@"+supabaseCLI, []string{"config", "push", "--project-ref", a.project.reference()}, true, false); err != nil {
+	if _, err := a.runSupabase(ctx, []string{"config", "push", "--project-ref", a.project.reference()}, commandOptions{interactive: true}); err != nil {
 		fmt.Fprintf(a.out, "Automatic Auth URL update failed. Set Site URL to %s and add %s/** in Supabase Dashboard.\n", a.finalURL, strings.TrimRight(a.finalURL, "/"))
-		_ = openBrowser(ctx, "https://supabase.com/dashboard/project/"+a.project.reference()+"/auth/url-configuration")
+		_ = a.openURL(ctx, "https://supabase.com/dashboard/project/"+a.project.reference()+"/auth/url-configuration")
 		if ok, askErr := a.confirm("Continue after saving the Auth URL settings", true); askErr != nil || !ok {
 			return fmt.Errorf("Supabase Auth URL configuration remains incomplete")
 		}
 	}
 	fmt.Fprintln(a.out, "Create or invite the first CRM user in Supabase Dashboard → Authentication → Users.")
-	_ = openBrowser(ctx, "https://supabase.com/dashboard/project/"+a.project.reference()+"/auth/users")
+	_ = a.openURL(ctx, "https://supabase.com/dashboard/project/"+a.project.reference()+"/auth/users")
 	if ok, err := a.confirm("Continue after creating or inviting the first CRM user", true); err != nil || !ok {
 		return errorsNew("first CRM user step was not confirmed")
 	}
