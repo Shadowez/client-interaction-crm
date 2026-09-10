@@ -1,0 +1,266 @@
+.clients-container {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 15px;
+  background-color: white;
+  padding: 1.5rem;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.header h1 {
+  color: #2c3e50;
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.header-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.header-controls button {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.header-controls button:first-child {
+  background-color: #3498db;
+  color: white;
+}
+
+.header-controls button:first-child:hover {
+  background-color: #2980b9;
+}
+
+.filter-active {
+  background-color: #2c3e50;
+  color: white;
+}
+
+.filter-active:hover {
+  background-color: #1a252f;
+}
+
+.header-controls button:not(.filter-active) {
+  background-color: #ecf0f1;
+  color: #2c3e50;
+}
+
+.header-controls button:not(.filter-active):hover {
+  background-color: #dfe6e9;
+}
+
+.clients-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background-color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.clients-table th,
+.clients-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #ecf0f1;
+}
+
+.clients-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #2c3e50;
+  position: sticky;
+  top: 0;
+}
+
+.clients-table tr:last-child td {
+  border-bottom: none;
+}
+
+.clients-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+.clients-table button {
+  margin-right: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+}
+
+
+
+.company-name {
+  color: #3498db;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.company-name:hover {
+  color: #2980b9;
+  text-decoration: underline;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.2rem;
+  color: #7f8c8d;
+}
+
+.filter-status {
+  margin: 1rem 0;
+  padding: 1rem;
+  background-color: #e8f4fc;
+  border-radius: 6px;
+  color: #3498db;
+  font-style: italic;
+  border-left: 4px solid #3498db;
+}
+
+.no-data {
+  text-align: center;
+  padding: 3rem;
+  color: #95a5a6;
+  font-style: italic;
+}
+
+.loading-row {
+  text-align: center;
+  padding: 2rem;
+}
+
+.loading-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  color: #7f8c8d;
+}
+
+.loading-spinner::after {
+  content: "";
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ddd;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  }
+
+/* Compact icons on small screens */
+@media (max-width: 480px) {
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    margin-right: 0.3rem;
+  }
+
+  .icon-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 1024px) {
+  .clients-container {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .clients-container {
+    padding: 1rem;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+
+  .header h1 {
+    text-align: center;
+  }
+
+  .header-controls {
+    justify-content: center;
+  }
+
+  .clients-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .filter-status {
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-controls {
+    flex-direction: column;
+  }
+
+  .header-controls button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .clients-table {
+    font-size: 0.9rem;
+  }
+
+  .clients-table th,
+  .clients-table td {
+    padding: 0.7rem;
+  }
+
+  .clients-table button {
+    margin-bottom: 5px;
+    width: 100%;
+  }
+}
+
+
+
+
+.page-error, .form-error {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border-radius: 6px;
+  background: #f8d7da;
+  color: #721c24;
+  text-align: left;
+}
+.form-error { margin-top: 0; }

@@ -1,0 +1,94 @@
+.calls-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background-color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.calls-table th,
+.calls-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #ecf0f1;
+}
+
+/* Let interaction descriptions wrap */
+.calls-table td:nth-child(4) { /* Description column */
+  max-width: 500px;
+  min-width: 300px;
+  word-wrap: break-word;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.calls-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #2c3e50;
+  position: sticky;
+  top: 0;
+}
+
+.calls-table tr:last-child td {
+  border-bottom: none;
+}
+
+.calls-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .calls-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  /* Keep descriptions readable on mobile */
+  .calls-table td:nth-child(4) {
+    white-space: normal;
+    max-width: 500px; /* Preserve useful reading width */
+    min-width: 200px;
+    word-break: break-word;
+  }
+
+  /* Keep compact columns on one line */
+  .calls-table td:not(:nth-child(4)) {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .calls-table th,
+  .calls-table td {
+    padding: 0.7rem;
+  }
+
+  /* Relax the width limit on very small screens */
+  .calls-table td:nth-child(4) {
+    max-width: none; /* No maximum width */
+    min-width: 150px;
+    font-size: 0.9rem;
+  }
+
+  .calls-table button {
+    margin-bottom: 5px;
+    width: 100%;
+  }
+
+  /* Compact actions on very small screens */
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    margin-right: 0.3rem;
+  }
+
+  .icon-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+}
