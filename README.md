@@ -27,14 +27,28 @@ Companies and their interaction history are shared by the authenticated members 
 - Guided Supabase setup and Vercel-ready SPA configuration.
 - GitHub Actions CI.
 
-## Fastest setup
+## Easy install
+
+Ordinary users can deploy without Git, Node.js, npm, Supabase CLI knowledge, Vercel CLI knowledge, or a GitHub account:
+
+1. Download the Windows or Linux launcher and matching checksum from an official GitHub Release.
+2. Verify the checksum and run the launcher.
+3. Choose a local work directory and provide optional company branding.
+4. Sign in to, or create, a Supabase account in the official browser flow. The launcher creates and configures a new dedicated project by default.
+5. Sign in to, or create, a Vercel account in the official browser flow.
+6. Create/invite the first CRM user in the Supabase Dashboard page opened for you.
+7. Receive and open the final CRM web address.
+
+The launcher stores its application payload, optional portable Node runtime, and troubleshooting log entirely under the selected user-writable directory. It does not require administrator privileges or modify the global `PATH`. See [launcher acceptance and maintenance documentation](installer/README.md) for platform-specific instructions, cleanup, release details, and the unsigned Windows SmartScreen notice.
+
+## Developer setup
 
 ### Requirements
 
 - Node.js 20 or newer.
 - npm.
 - A Supabase account with permission/quota to use a project.
-- A GitHub account and Vercel account for the recommended deployment path.
+- A Vercel account for the recommended deployment path. GitHub is needed only when using the Git-integrated deployment workflow.
 
 ### 1. Create your copy
 
