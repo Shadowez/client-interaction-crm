@@ -86,7 +86,7 @@ func TestProjectCreateRequiredArgumentsAndSuccess(t *testing.T) {
 	if err != nil || created.reference() != "new-project-ref" {
 		t.Fatalf("created %#v, error %v", created, err)
 	}
-	want := []string{"projects", "create", "New CRM", "--org-id", "org-id", "--region", "eu-central-1", "--db-password", password, "--output", "json"}
+	want := []string{"projects", "create", "New CRM", "--org-id", "org-id", "--region", "eu-central-1", "--db-password", password, "--output", "json", "--yes"}
 	if !reflect.DeepEqual(gotArgs, want) {
 		t.Fatalf("arguments %#v, want %#v", gotArgs, want)
 	}
@@ -105,6 +105,9 @@ func TestDatabasePasswordPassedByEnvironmentAfterCreation(t *testing.T) {
 			return `[{"api_key":"sb_publishable_test"}]`, nil
 		}
 		databaseCommands++
+		if !containsString(args, "--yes") {
+			t.Fatalf("automatic confirmation missing for %#v", args)
+		}
 		if !containsString(options.env, "SUPABASE_DB_PASSWORD="+a.databasePassword) {
 			t.Fatalf("database password environment missing for %#v", args)
 		}
@@ -206,7 +209,7 @@ func TestDatabasePasswordValidationAndNoPersistenceOrLogging(t *testing.T) {
 	log.SetOutput(logFile)
 	t.Cleanup(func() { log.SetOutput(previousWriter) })
 	commandApp := &app{appDir: t.TempDir(), logFile: logFile, out: &bytes.Buffer{}}
-	_, err = commandApp.command(context.Background(), os.Args[0], []string{"-test.run=TestPasswordLogHelper", "--", "--db-password", password}, commandOptions{capture: true, sensitive: true, env: []string{"CRM_TEST_PASSWORD_HELPER=1"}})
+	_, err = commandApp.command(context.Background(), os.Args[0], []string{"-test.run=TestPasswordLogHelper", "--", "--db-password", password}, commandOptions{capture: true, sensitive: true, env: []string{"CRM_TEST_PASSWORD_HELPER=1"}, secretValues: []string{password}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,6 +227,7 @@ func TestPasswordLogHelper(t *testing.T) {
 		return
 	}
 	fmt.Fprintln(os.Stdout, strings.Join(os.Args, " "))
+	fmt.Fprintln(os.Stderr, strings.Join(os.Args, " "))
 	os.Exit(0)
 }
 

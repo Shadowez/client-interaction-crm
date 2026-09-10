@@ -93,7 +93,7 @@ func parseOrganizations(output string) ([]organization, error) {
 }
 
 func (a *app) organizations(ctx context.Context) ([]organization, error) {
-	out, err := a.runSupabase(ctx, []string{"orgs", "list", "--output", "json"}, commandOptions{capture: true})
+	out, err := a.runSupabase(ctx, []string{"orgs", "list", "--output", "json"}, commandOptions{capture: true, progressMessage: "Still checking your Supabase account…"})
 	if err != nil {
 		return nil, err
 	}
@@ -207,8 +207,9 @@ func (a *app) createDedicatedProject(ctx context.Context, name string, org organ
 	if err := validateDatabasePassword(password); err != nil {
 		return project{}, err
 	}
-	args := []string{"projects", "create", name, "--org-id", org.reference(), "--region", region.Code, "--db-password", password, "--output", "json"}
-	out, err := a.runSupabase(ctx, args, commandOptions{capture: true, sensitive: true})
+	args := []string{"projects", "create", name, "--org-id", org.reference(), "--region", region.Code, "--db-password", password, "--output", "json", "--yes"}
+	fmt.Fprintln(a.out, "Creating your dedicated Supabase project. This can take a few minutes.")
+	out, err := a.runSupabase(ctx, args, commandOptions{capture: true, sensitive: true, progressMessage: "Still creating the Supabase project…", secretValues: []string{password}})
 	if err != nil {
 		return project{}, err
 	}
@@ -268,8 +269,9 @@ func (a *app) provisionNewProject(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(a.out, "A strong database password was generated for this Supabase project.")
-	fmt.Fprintln(a.out, "Save it in your password manager now. It is shown once and is not written to CRM files or logs:")
+	fmt.Fprintln(a.out, "This password protects the CRM database.")
+	fmt.Fprintln(a.out, "You normally will not need it to use the CRM, but save it in your password manager in case you need to administer the database later.")
+	fmt.Fprintln(a.out, "It is shown once and is not written to CRM files or logs:")
 	fmt.Fprintf(a.out, "\n%s\n\n", password)
 	confirmed, err := a.confirm("I saved the database password", false)
 	if err != nil {

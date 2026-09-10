@@ -39,7 +39,9 @@ type app struct {
 	project          project
 	databasePassword string
 	finalURL         string
+	deploymentURL    string
 	supabaseRun      func(context.Context, []string, commandOptions) (string, error)
+	vercelRun        func(context.Context, []string, commandOptions) (string, error)
 	browserOpen      func(context.Context, string) error
 }
 
@@ -112,7 +114,7 @@ func (a *app) run(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Fprintf(a.out, "\nClient Interaction CRM is ready.\n\nWeb address:\n%s\n\nCompany:\n%s\n\nLocal files:\n%s\n\nNext:\nCreate or invite the first user in Supabase Dashboard, then sign in to the CRM.\n", a.finalURL, displayCompany(a.company), a.root)
+	fmt.Fprintf(a.out, "\nSetup complete.\n\nWeb address:\n%s\n\nCompany:\n%s\n\nLocal files:\n%s\n\nOpen your CRM and sign in using the user you just created or invited.\n", a.finalURL, displayCompany(a.company), a.root)
 	return nil
 }
 

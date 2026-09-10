@@ -29,15 +29,27 @@ Companies and their interaction history are shared by the authenticated members 
 
 ## Easy install
 
-Ordinary users can deploy without Git, Node.js, npm, Supabase CLI knowledge, Vercel CLI knowledge, or a GitHub account:
+Ordinary users do not need Git, Node.js, npm, Go, SQL knowledge, Supabase CLI knowledge, Vercel CLI knowledge, or a GitHub account.
 
-1. Download the Windows or Linux launcher and matching checksum from an official GitHub Release.
-2. Verify the checksum and run the launcher.
-3. Choose a local work directory and provide optional company branding.
-4. Sign in to, or create, a Supabase account in the official browser flow. The launcher creates and configures a new dedicated project by default.
-5. Sign in to, or create, a Vercel account in the official browser flow.
-6. Create/invite the first CRM user in the Supabase Dashboard page opened for you.
-7. Receive and open the final CRM web address.
+### Windows
+
+1. Download `ClientInteractionCRM-Setup-windows-amd64.exe` from an official GitHub Release. Download its `.sha256` file if you want to verify the download.
+2. Double-click the launcher. Windows SmartScreen may warn about the unsigned first release; verify that the file came from the official repository rather than disabling SmartScreen.
+3. Choose a work folder and follow the company-name and optional-logo prompts.
+4. Sign in to Supabase in the browser, or create a Supabase account there if you are new.
+5. Choose where the database should be hosted and let the installer prepare it.
+6. Sign in to Vercel in the browser, or create a Vercel account there if you are new.
+7. Create or invite the first CRM user on the Supabase page opened by the installer.
+8. Open the final CRM address and sign in.
+
+No PowerShell commands or administrator access are required for normal Windows installation.
+
+### Linux
+
+1. Download `client-interaction-crm-setup-linux-amd64` and its `.sha256` file from an official GitHub Release.
+2. Verify the checksum if desired, then mark the launcher executable with `chmod +x client-interaction-crm-setup-linux-amd64`.
+3. Run `./client-interaction-crm-setup-linux-amd64` and follow the same guided Supabase, Vercel, branding, database-location, and first-user steps shown above.
+4. Open the final CRM address and sign in.
 
 The launcher stores its application payload, optional portable Node runtime, and troubleshooting log entirely under the selected user-writable directory. It does not require administrator privileges or modify the global `PATH`. See [launcher acceptance and maintenance documentation](installer/README.md) for platform-specific instructions, cleanup, release details, and the unsigned Windows SmartScreen notice.
 

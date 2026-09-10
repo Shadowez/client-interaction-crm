@@ -30,16 +30,6 @@ func (p project) reference() string {
 	return p.ID
 }
 
-func (a *app) npxCommand(ctx context.Context, packageName string, args []string, interactive, capture bool) (string, error) {
-	all := append([]string{"--yes", packageName}, args...)
-	return a.command(ctx, a.npx, all, commandOptions{interactive: interactive, capture: capture, env: []string{nodePathEnvironment(filepath.Dir(a.node))}})
-}
-
-func (a *app) npxSensitiveCommand(ctx context.Context, packageName string, args []string) (string, error) {
-	all := append([]string{"--yes", packageName}, args...)
-	return a.command(ctx, a.npx, all, commandOptions{capture: true, sensitive: true, env: []string{nodePathEnvironment(filepath.Dir(a.node))}})
-}
-
 func nodePathEnvironment(bin string) string {
 	return "PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH")
 }
@@ -101,13 +91,17 @@ func ioCopy(destination *os.File, source *os.File) (int64, error) {
 }
 
 func (a *app) connectSupabase(ctx context.Context) error {
-	fmt.Fprintln(a.out, "Client Interaction CRM uses Supabase for authentication and database storage.")
-	fmt.Fprintln(a.out, "If you do not already have a Supabase account, you can create one in the browser during the next step.")
+	fmt.Fprintln(a.out, "Client Interaction CRM uses Supabase for secure authentication and database storage.")
+	fmt.Fprintln(a.out, "Already have a Supabase account? Sign in in the browser.")
+	fmt.Fprintln(a.out, "New to Supabase? Create an account in the browser, then continue.")
+	fmt.Fprintln(a.out, "This installer never asks for your Supabase account password.")
+	fmt.Fprintln(a.out, "\nPreparing Supabase connection tools. First-time setup may take several minutes.")
 	projects, err := a.projects(ctx)
 	if err != nil {
-		fmt.Fprintln(a.out, "Starting the official Supabase browser sign-in…")
+		fmt.Fprintln(a.out, "\nOpening Supabase sign-in…")
+		fmt.Fprintln(a.out, "If the browser does not open automatically, use the sign-in link shown below.")
 		if _, loginErr := a.runSupabase(ctx, []string{"login"}, commandOptions{interactive: true}); loginErr != nil {
-			return fmt.Errorf("Supabase sign-in did not complete: %w", loginErr)
+			return loginErr
 		}
 		projects, err = a.projects(ctx)
 		if err != nil {
@@ -177,7 +171,7 @@ func (a *app) connectSupabase(ctx context.Context) error {
 }
 
 func (a *app) projects(ctx context.Context) ([]project, error) {
-	out, err := a.runSupabase(ctx, []string{"projects", "list", "--output", "json"}, commandOptions{capture: true})
+	out, err := a.runSupabase(ctx, []string{"projects", "list", "--output", "json"}, commandOptions{capture: true, progressMessage: "Still preparing Supabase tools…"})
 	if err != nil {
 		return nil, err
 	}
@@ -208,16 +202,22 @@ func (a *app) configureSupabase(ctx context.Context) error {
 		return fmt.Errorf("missing Supabase project reference")
 	}
 	commands := [][]string{
-		{"link", "--project-ref", ref},
-		{"db", "push", "--linked", "--skip-vault"},
-		{"config", "push", "--project-ref", ref},
+		{"link", "--project-ref", ref, "--yes"},
+		{"db", "push", "--linked", "--skip-vault", "--yes"},
+		{"config", "push", "--project-ref", ref, "--yes"},
+	}
+	messages := []string{
+		"Connecting the new CRM database…",
+		"Creating the CRM database tables and security rules…",
+		"Applying secure sign-in settings…",
 	}
 	databaseEnv := []string{}
 	if a.databasePassword != "" {
 		databaseEnv = append(databaseEnv, "SUPABASE_DB_PASSWORD="+a.databasePassword)
 	}
-	for _, args := range commands {
-		if _, err := a.runSupabase(ctx, args, commandOptions{interactive: true, env: databaseEnv}); err != nil {
+	for index, args := range commands {
+		fmt.Fprintln(a.out, messages[index])
+		if _, err := a.runSupabase(ctx, args, commandOptions{env: databaseEnv, progressMessage: "Still working with Supabase…"}); err != nil {
 			return err
 		}
 	}
@@ -271,10 +271,16 @@ func walkForKey(value any) string {
 
 func (a *app) connectVercel(ctx context.Context) error {
 	fmt.Fprintln(a.out, "Client Interaction CRM uses Vercel to host the web interface.")
-	fmt.Fprintln(a.out, "If you do not already have a Vercel account, you can create one during browser sign-in.")
-	if _, err := a.npxCommand(ctx, "vercel@"+vercelCLI, []string{"whoami"}, false, true); err != nil {
-		if _, loginErr := a.npxCommand(ctx, "vercel@"+vercelCLI, []string{"login"}, true, false); loginErr != nil {
-			return fmt.Errorf("Vercel sign-in did not complete: %w", loginErr)
+	fmt.Fprintln(a.out, "Already have a Vercel account? Sign in in the browser.")
+	fmt.Fprintln(a.out, "New to Vercel? Create an account in the browser, then continue.")
+	fmt.Fprintln(a.out, "This installer never asks for your Vercel password.")
+	fmt.Fprintln(a.out, "\nPreparing Vercel deployment tools…")
+	fmt.Fprintln(a.out, "First-time setup may take several minutes. This is normal.")
+	if _, err := a.runVercel(ctx, []string{"whoami"}, commandOptions{capture: true, progressMessage: "Still preparing Vercel tools…"}); err != nil {
+		fmt.Fprintln(a.out, "\nOpening Vercel sign-in…")
+		fmt.Fprintln(a.out, "If the browser does not open automatically, use the sign-in link or code shown below.")
+		if _, loginErr := a.runVercel(ctx, []string{"login"}, commandOptions{interactive: true}); loginErr != nil {
+			return loginErr
 		}
 	}
 	return nil
@@ -282,7 +288,8 @@ func (a *app) connectVercel(ctx context.Context) error {
 
 func (a *app) deploy(ctx context.Context) error {
 	projectName := vercelProjectName(displayCompany(a.company))
-	if _, err := a.npxCommand(ctx, "vercel@"+vercelCLI, []string{"link", "--yes", "--project", projectName}, true, false); err != nil {
+	fmt.Fprintln(a.out, "Creating or reusing the Vercel project for this CRM…")
+	if _, err := a.runVercel(ctx, []string{"link", "--yes", "--project", projectName}, commandOptions{progressMessage: "Still preparing the Vercel project…"}); err != nil {
 		return err
 	}
 	envData, err := os.ReadFile(filepath.Join(a.appDir, ".env.local"))
@@ -295,18 +302,53 @@ func (a *app) deploy(ctx context.Context) error {
 		if value == "" {
 			return fmt.Errorf("missing %s", name)
 		}
-		if _, err := a.command(ctx, a.npx, []string{"--yes", "vercel@" + vercelCLI, "env", "add", name, "production", "--force"}, commandOptions{stdin: value + "\n", env: []string{nodePathEnvironment(filepath.Dir(a.node))}}); err != nil {
+		if _, err := a.runVercel(ctx, []string{"env", "add", name, "production", "--force"}, commandOptions{stdin: value + "\n"}); err != nil {
 			return err
 		}
 	}
+	fmt.Fprintln(a.out, "Deploying the CRM web interface. This can take several minutes.")
 	args := []string{"deploy", "--prod", "--yes"}
-	out, err := a.npxCommand(ctx, "vercel@"+vercelCLI, args, false, true)
+	out, err := a.runVercel(ctx, args, commandOptions{capture: true, progressMessage: "Still deploying the CRM web interface…"})
 	if err != nil {
 		return err
 	}
-	a.finalURL = lastHTTPSURL(out)
-	if a.finalURL == "" {
+	a.deploymentURL = lastHTTPSURL(out)
+	if a.deploymentURL == "" {
 		return fmt.Errorf("Vercel deployment completed without a production URL")
+	}
+	fmt.Fprintln(a.out, "Verifying that the production deployment is ready…")
+	inspectOutput, err := a.runVercel(ctx, deploymentInspectArgs(a.deploymentURL), commandOptions{capture: true, progressMessage: "Still waiting for Vercel to finish the deployment…"})
+	if err != nil {
+		return err
+	}
+	metadata, err := parseDeploymentMetadata(inspectOutput)
+	if err != nil {
+		return err
+	}
+	if metadata.Failed {
+		return errorsNew("Vercel reported that the production deployment failed. See the troubleshooting log, then safely run the installer again using the same installation folder")
+	}
+	if !metadata.Ready {
+		return errorsNew("Vercel did not confirm that the production deployment is ready. See the troubleshooting log, then safely run the installer again using the same installation folder")
+	}
+	aliases := metadata.Aliases
+	if len(aliases) == 0 {
+		if projectOutput, projectErr := a.runVercel(ctx, []string{"project", "inspect", projectName, "--json", "--yes"}, commandOptions{capture: true}); projectErr == nil {
+			if projectMetadata, parseErr := parseDeploymentMetadata(projectOutput); parseErr == nil {
+				candidate := selectCanonicalURL(a.deploymentURL, projectMetadata.Aliases)
+				if candidate != a.deploymentURL {
+					if aliasOutput, aliasErr := a.runVercel(ctx, []string{"inspect", candidate, "--json"}, commandOptions{capture: true}); aliasErr == nil {
+						if aliasMetadata, aliasParseErr := parseDeploymentMetadata(aliasOutput); aliasParseErr == nil && aliasMetadata.Ready && metadata.ID != "" && aliasMetadata.ID == metadata.ID {
+							aliases = []string{candidate}
+						}
+					}
+				}
+			}
+		}
+	}
+	a.finalURL = selectCanonicalURL(a.deploymentURL, aliases)
+	if a.finalURL == "" {
+		return errorsNew("Vercel did not return a usable production URL")
 	}
 	if err := a.saveState(); err != nil {
 		return err
@@ -314,17 +356,21 @@ func (a *app) deploy(ctx context.Context) error {
 	if err := writeAuthConfig(filepath.Join(a.appDir, "supabase", "config.toml"), a.finalURL); err != nil {
 		return err
 	}
-	if _, err := a.runSupabase(ctx, []string{"config", "push", "--project-ref", a.project.reference()}, commandOptions{interactive: true}); err != nil {
+	if _, err := a.runSupabase(ctx, []string{"config", "push", "--project-ref", a.project.reference(), "--yes"}, commandOptions{progressMessage: "Still updating secure sign-in settings…"}); err != nil {
 		fmt.Fprintf(a.out, "Automatic Auth URL update failed. Set Site URL to %s and add %s/** in Supabase Dashboard.\n", a.finalURL, strings.TrimRight(a.finalURL, "/"))
 		_ = a.openURL(ctx, "https://supabase.com/dashboard/project/"+a.project.reference()+"/auth/url-configuration")
 		if ok, askErr := a.confirm("Continue after saving the Auth URL settings", true); askErr != nil || !ok {
 			return fmt.Errorf("Supabase Auth URL configuration remains incomplete")
 		}
 	}
-	fmt.Fprintln(a.out, "Create or invite the first CRM user in Supabase Dashboard → Authentication → Users.")
-	_ = a.openURL(ctx, "https://supabase.com/dashboard/project/"+a.project.reference()+"/auth/users")
-	if ok, err := a.confirm("Continue after creating or inviting the first CRM user", true); err != nil || !ok {
-		return errorsNew("first CRM user step was not confirmed")
+	dashboardURL := "https://supabase.com/dashboard/project/" + a.project.reference() + "/auth/users"
+	fmt.Fprintln(a.out, "\nYour CRM infrastructure is ready.")
+	fmt.Fprintln(a.out, "One final account step is required.")
+	fmt.Fprintln(a.out, "Open Supabase Dashboard → Authentication → Users and create or invite the first CRM user.")
+	fmt.Fprintf(a.out, "Dashboard: %s\n", dashboardURL)
+	_ = a.openURL(ctx, dashboardURL)
+	if _, err := a.ask("Press Enter after you have completed this step", ""); err != nil {
+		return err
 	}
 	return nil
 }

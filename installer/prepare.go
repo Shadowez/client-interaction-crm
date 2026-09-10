@@ -19,7 +19,8 @@ func (a *app) prepare(ctx context.Context) error {
 	if err := a.prepareNode(ctx); err != nil {
 		return err
 	}
-	_, err := a.command(ctx, a.npm, []string{"ci", "--no-audit", "--no-fund"}, commandOptions{})
+	fmt.Fprintln(a.out, "Installing the application components. This may take several minutes the first time.")
+	_, err := a.command(ctx, a.npm, []string{"ci", "--no-audit", "--no-fund", "--loglevel=error"}, commandOptions{progressMessage: "Still preparing the application…"})
 	return err
 }
 
@@ -105,7 +106,7 @@ func (a *app) acquirePayload(ctx context.Context, asset, destination string) err
 			return errorsNew("CRM_PAYLOAD_SHA256 must be exactly 64 hexadecimal characters")
 		}
 		if err := verifyChecksum(destination, expected); err != nil {
-			return fmt.Errorf("verify local CRM payload: %w", err)
+			return fmt.Errorf("the local application package failed its checksum verification; setup stopped safely: %w", err)
 		}
 		return nil
 	}
@@ -126,7 +127,10 @@ func (a *app) acquirePayload(ctx context.Context, asset, destination string) err
 	if err != nil {
 		return err
 	}
-	return verifyChecksum(destination, expected)
+	if err := verifyChecksum(destination, expected); err != nil {
+		return fmt.Errorf("the downloaded application package failed its checksum verification; setup stopped safely. Check your internet connection and download source, then run the installer again: %w", err)
+	}
+	return nil
 }
 
 func (a *app) prepareNode(ctx context.Context) error {
@@ -146,6 +150,7 @@ func (a *app) prepareNode(ctx context.Context) error {
 	if runtime.GOARCH != "amd64" || (runtime.GOOS != "windows" && runtime.GOOS != "linux") {
 		return fmt.Errorf("portable Node is supported on Windows x64 and Linux x64, got %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
+	fmt.Fprintln(a.out, "Downloading a private application runtime. This may take several minutes.")
 	if err := os.MkdirAll(a.runtime, 0o755); err != nil {
 		return err
 	}
