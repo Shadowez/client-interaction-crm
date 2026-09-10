@@ -82,3 +82,15 @@ Use a Windows x64 non-administrator account with no Git, Node, npm, Supabase CLI
 7. Re-run the launcher against the same local directory to verify safe recovery after a simulated cancellation.
 
 To remove local setup files, close the launcher and delete the chosen `ClientInteractionCRM` directory. This removes source, portable Node, and logs. It never deletes Supabase or Vercel projects; remove those explicitly in their dashboards if desired.
+
+## Post-publication download smoke test
+
+After private Windows acceptance succeeds:
+
+1. Change the repository visibility to Public and confirm that the existing `v1.1.0` Release is publicly visible.
+2. In a clean Windows folder, download only `ClientInteractionCRM-Setup-windows-amd64.exe`.
+3. Confirm that `CRM_PAYLOAD_FILE` is not set, then double-click the executable normally.
+4. Confirm that it downloads and checksum-verifies the public GitHub `v1.1.0` application payload.
+5. Once the launcher reaches branding/Supabase setup successfully, this download-only smoke test may be cancelled if a complete Windows provisioning acceptance passed immediately beforehand.
+
+Publish an announcement or share the release only after this public-download smoke test passes.
