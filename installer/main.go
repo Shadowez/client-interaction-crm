@@ -35,6 +35,8 @@ type app struct {
 	node               string
 	npm                string
 	npx                string
+	npmCache           string
+	portableNodeOwned  bool
 	company            string
 	project            project
 	databasePassword   string
@@ -127,6 +129,10 @@ func (a *app) run(ctx context.Context) error {
 	}
 	a.appDir = filepath.Join(a.root, "app")
 	a.runtime = filepath.Join(a.root, ".crm-runtime")
+	a.npmCache, err = crmNPMCacheDir()
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Join(a.root, "logs"), 0o700); err != nil {
 		return fmt.Errorf("create installation directory: %w", err)
 	}
@@ -158,6 +164,9 @@ func (a *app) run(ctx context.Context) error {
 	}
 	if err := a.step(ctx, 6, "Deploying web application", a.deploy); err != nil {
 		return err
+	}
+	if err := a.finalizeLifecycleFiles(); err != nil {
+		return fmt.Errorf("write local uninstall information: %w", err)
 	}
 
 	fmt.Fprintf(a.out, "\nSetup complete.\n\nWeb address:\n%s\n\nCompany:\n%s\n\nLocal files:\n%s\n\nOpen your CRM and sign in using the user you just created or invited.\n", a.finalURL, displayCompany(a.company), a.root)

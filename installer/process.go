@@ -33,7 +33,7 @@ func (a *app) command(ctx context.Context, executable string, args []string, opt
 	actualExecutable, actualArgs := executableArgs(runtime.GOOS, executable, args)
 	cmd := exec.CommandContext(ctx, actualExecutable, actualArgs...)
 	cmd.Dir = a.appDir
-	cmd.Env = append(os.Environ(), options.env...)
+	cmd.Env = append(os.Environ(), a.commandEnvironment(executable, options.env)...)
 	var captured bytes.Buffer
 	var diagnostic bytes.Buffer
 	if options.capture {
@@ -73,6 +73,19 @@ func (a *app) command(ctx context.Context, executable string, args []string, opt
 		return captured.String(), friendlyCommandError(executable, args, diagnostic.String()+"\n"+captured.String(), err)
 	}
 	return strings.TrimSpace(captured.String()), nil
+}
+
+func (a *app) commandEnvironment(executable string, existing []string) []string {
+	env := append([]string(nil), existing...)
+	if a.npmCache != "" && isNPMExecutable(executable) {
+		env = append(env, "npm_config_cache="+a.npmCache)
+	}
+	return env
+}
+
+func isNPMExecutable(executable string) bool {
+	name := strings.ToLower(strings.TrimSuffix(filepath.Base(executable), filepath.Ext(executable)))
+	return name == "npm" || name == "npx"
 }
 
 func redactText(value string, secrets []string) string {

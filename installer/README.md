@@ -2,6 +2,10 @@
 
 The launcher is a thin, dependency-free Go executable. It downloads the matching tagged application payload, verifies its release SHA-256 file, uses Node 20–24 when present, or installs the official Node.js `v22.23.2` portable build after verifying `SHASUMS256.txt`. Runtime files stay below `.crm-runtime/node`; source stays in `app`; diagnostic output stays in `logs/setup.log`. A non-secret `.crm-state.json` records the selected project so a cancelled run can resume without silently creating another remote project.
 
+Launcher-owned npm and npx processes use `npm_config_cache` per child process. On Windows this is `%LOCALAPPDATA%\ClientInteractionCRM\npm-cache`; Linux uses the corresponding `os.UserCacheDir()/ClientInteractionCRM/npm-cache`. The launcher never changes global npm configuration or claims ownership of a system Node installation or the user's general npm cache.
+
+On Windows the launcher installs the standalone `Uninstall Client Interaction CRM.exe` under `%LOCALAPPDATA%\ClientInteractionCRM` and writes `install-manifest.json` beside it. The non-secret manifest records only explicit CRM ownership: installation/runtime/cache/AppData/CRM-INFO/shortcut/uninstaller paths and non-secret project identifiers. It never stores passwords, service keys, authentication tokens, OIDC tokens, or login codes. The uninstaller validates the manifest against fixed CRM-owned locations, installation markers and package identity, rejects protected roots and reparse points, previews cleanup, defaults the final confirmation to No, and never deletes cloud projects. Supabase and Vercel CLI logout are separate opt-in choices because they can affect other projects using the same login.
+
 After application preparation, the launcher stores only the last installation directory in the user's OS configuration directory (`%AppData%\ClientInteractionCRM` on Windows and the standard user config directory on Linux). On a later run it offers to resume that prepared installation and reuse its existing branding. No credential, password, token, project secret, or authentication material is stored in this pointer.
 
 On Windows, npm's `.cmd` launchers are never passed to `CreateProcess` or interpolated into a shell command. The launcher maps `npm.cmd` and `npx.cmd` to the adjacent `node.exe` and npm JavaScript entry point, retaining a structured argument array. This supports system Node under `C:\Program Files\nodejs`, portable Node, Unicode/space-containing install paths and project names, and shell-special characters in generated database passwords without `cmd.exe` interpretation.
@@ -19,7 +23,7 @@ The launcher generates a strong database password, shows it once for the user to
 3. Commit and push the reviewed changes, then create and push a `vX.Y.Z` tag.
 4. Download all artifacts from **Build launcher release assets**.
 5. Verify every `.sha256` file locally.
-6. Create the GitHub Release manually and attach the application ZIP, its checksum, both launchers, and both launcher checksums. Do not publish a launcher without its matching payload.
+6. Create the GitHub Release manually and attach the application ZIP, both launchers, the Windows uninstaller, their checksum files, and `Run-Windows-Setup.cmd`. Do not publish a launcher without its matching payload and uninstaller.
 
 The workflow does not create a tag or GitHub Release.
 
@@ -77,15 +81,15 @@ Use an x64 Linux account with no relevant CLI login. A preinstalled Node is opti
 
 Use a Windows x64 non-administrator account with no Git, Node, npm, Supabase CLI, Vercel CLI, Supabase account, or Vercel account.
 
-1. Download `ClientInteractionCRM-Setup-windows-amd64.exe` and its checksum to a clean folder.
-2. Double-click `Run-Private-Windows-Acceptance.cmd` from the maintainer-provided acceptance folder. It selects the matching local payload and starts the launcher without requiring PowerShell.
+1. Download `ClientInteractionCRM-Setup-windows-amd64.exe`, `Uninstall Client Interaction CRM.exe`, the application payload, and their checksums to a clean folder.
+2. Double-click `Run-Windows-Setup.cmd` (or the private acceptance wrapper before publication). The private wrapper selects the matching local payload and uninstaller, then starts the launcher without requiring PowerShell.
 3. An unsigned first release may trigger SmartScreen; inspect the publisher/file and choose to run only if it came from the official release. Do not disable SmartScreen.
 4. Choose a user-writable path containing spaces and Unicode, then complete branding.
 5. Create Supabase and Vercel accounts in the official browser flows when prompted; create only disposable test resources.
 6. Complete the first-user Dashboard step and test the final URL, CRUD, anonymous blocking, and password reset as above.
 7. Re-run `Run-Private-Windows-Acceptance.cmd`. Accept the default `Resume this setup? [Y/n]` prompt and verify it automatically selects the prior directory, recognizes the prepared app, offers to reuse branding, and does not silently duplicate a Supabase project.
 
-To remove local setup files, close the launcher and delete the chosen `ClientInteractionCRM` directory. This removes source, portable Node, and logs. It never deletes Supabase or Vercel projects; remove those explicitly in their dashboards if desired.
+To remove local files, run `%LOCALAPPDATA%\ClientInteractionCRM\Uninstall Client Interaction CRM.exe`. Review the exact cleanup preview and confirm only if the displayed installation path is correct. Supabase and Vercel CLI logout are off by default. Online projects are never deleted automatically.
 
 ## Post-publication download smoke test
 

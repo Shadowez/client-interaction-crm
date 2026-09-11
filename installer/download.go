@@ -54,9 +54,14 @@ func sha256File(path string) (string, error) {
 
 func expectedChecksum(contents, filename string) (string, error) {
 	for _, line := range strings.Split(contents, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && strings.TrimPrefix(fields[1], "*") == filename && len(fields[0]) == 64 {
-			return strings.ToLower(fields[0]), nil
+		line = strings.TrimSpace(line)
+		if len(line) < 65 {
+			continue
+		}
+		hash := line[:64]
+		name := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line[64:]), "*"))
+		if name == filename && validSHA256(hash) {
+			return strings.ToLower(hash), nil
 		}
 	}
 	return "", fmt.Errorf("checksum for %s was not published", filename)

@@ -131,3 +131,16 @@ func TestNativeWindowsNpxShimExecution(t *testing.T) {
 		t.Fatalf("npx.cmd through node entrypoint failed: output %q, error %v", output, err)
 	}
 }
+
+func TestNPMAndNPXUseOnlyCRMOwnedPerProcessCache(t *testing.T) {
+	a := &app{npmCache: `C:\Users\test\AppData\Local\ClientInteractionCRM\npm-cache`}
+	for _, executable := range []string{`C:\Program Files\nodejs\npm.cmd`, `C:\Program Files\nodejs\npx.cmd`} {
+		env := a.commandEnvironment(executable, []string{"EXISTING=1"})
+		if !containsString(env, `npm_config_cache=C:\Users\test\AppData\Local\ClientInteractionCRM\npm-cache`) {
+			t.Fatalf("CRM cache missing for %s: %#v", executable, env)
+		}
+	}
+	if env := a.commandEnvironment(`C:\Program Files\nodejs\node.exe`, nil); len(env) != 0 {
+		t.Fatalf("cache leaked to non-npm process: %#v", env)
+	}
+}

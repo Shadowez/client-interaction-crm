@@ -48,6 +48,25 @@ func TestExpectedChecksum(t *testing.T) {
 	}
 }
 
+func TestExpectedChecksumSupportsAssetNamesWithSpaces(t *testing.T) {
+	hash := strings.Repeat("b", 64)
+	got, err := expectedChecksum(hash+"  Uninstall Client Interaction CRM.exe\n", "Uninstall Client Interaction CRM.exe")
+	if err != nil || got != hash {
+		t.Fatalf("got %q, %v", got, err)
+	}
+}
+
+func TestRootWindowsSetupLauncherNeedsNoPowerShell(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "Run-Windows-Setup.cmd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.ToLower(string(data))
+	if !strings.Contains(text, "clientinteractioncrm-setup-windows-amd64.exe") || strings.Contains(text, "powershell") {
+		t.Fatalf("unexpected root launcher: %s", data)
+	}
+}
+
 func TestVerifyChecksum(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "payload")
 	if err := os.WriteFile(path, []byte("known"), 0o600); err != nil {

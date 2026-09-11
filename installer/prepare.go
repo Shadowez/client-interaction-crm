@@ -21,7 +21,10 @@ func (a *app) prepare(ctx context.Context) error {
 	}
 	fmt.Fprintln(a.out, "Installing the application components. This may take several minutes the first time.")
 	_, err := a.command(ctx, a.npm, []string{"ci", "--no-audit", "--no-fund", "--loglevel=error"}, commandOptions{progressMessage: "Still preparing the application…"})
-	return err
+	if err != nil {
+		return err
+	}
+	return a.installLifecycleFiles(ctx)
 }
 
 func (a *app) preparePayload(ctx context.Context) error {
@@ -144,6 +147,7 @@ func (a *app) prepareNode(ctx context.Context) error {
 	}
 	nodeHome := filepath.Join(a.runtime, "node")
 	if existing := localNodeBinary(nodeHome); existing != "" {
+		a.portableNodeOwned = true
 		a.setNodePaths(filepath.Dir(existing))
 		return nil
 	}
@@ -205,6 +209,7 @@ func (a *app) prepareNode(ctx context.Context) error {
 		// Renamed successfully on the first attempt.
 	}
 	a.setNodePaths(nodeBinaryDir(nodeHome))
+	a.portableNodeOwned = true
 	return nil
 }
 
