@@ -40,3 +40,12 @@ func TestCRMDataDirectoriesAreProductScoped(t *testing.T) {
 		t.Fatalf("unexpected CRM npm cache %q: %v", cache, err)
 	}
 }
+
+func TestUninstallerReleaseAndInstalledNamesAreExplicit(t *testing.T) {
+	if uninstallerAsset != "Uninstall Client Interaction CRM.exe" {
+		t.Fatalf("installed uninstaller name %q", uninstallerAsset)
+	}
+	if uninstallerReleaseAsset != "Uninstall.Client.Interaction.CRM.exe" {
+		t.Fatalf("GitHub-normalized asset name %q", uninstallerReleaseAsset)
+	}
+}

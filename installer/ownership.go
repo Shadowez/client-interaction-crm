@@ -12,6 +12,7 @@ import (
 )
 
 const uninstallerAsset = "Uninstall Client Interaction CRM.exe"
+const uninstallerReleaseAsset = "Uninstall.Client.Interaction.CRM.exe"
 
 type installManifest struct {
 	Version               string   `json:"version"`
@@ -131,10 +132,10 @@ func (a *app) acquireUninstaller(ctx context.Context, destination string) error 
 	file := filepath.Join(temporary, uninstallerAsset)
 	checksum := file + ".sha256"
 	base := fmt.Sprintf("https://github.com/Shadowez/client-interaction-crm/releases/download/v%s/", version)
-	if err := download(ctx, base+"Uninstall%20Client%20Interaction%20CRM.exe", file); err != nil {
+	if err := download(ctx, base+uninstallerReleaseAsset, file); err != nil {
 		return fmt.Errorf("download CRM uninstaller: %w", err)
 	}
-	if err := download(ctx, base+"Uninstall%20Client%20Interaction%20CRM.exe.sha256", checksum); err != nil {
+	if err := download(ctx, base+uninstallerReleaseAsset+".sha256", checksum); err != nil {
 		return fmt.Errorf("download CRM uninstaller checksum: %w", err)
 	}
 	data, err := os.ReadFile(checksum)
