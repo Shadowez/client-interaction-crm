@@ -14,6 +14,28 @@ It includes:
 
 This is not a hosted SaaS or an enterprise CRM. One deployment and one Supabase project are intended for one trusted team.
 
+## Screenshots
+
+### Interaction history
+
+![Client Interaction CRM interaction history](docs/screenshots/interactions.png)
+
+### Sign in
+
+![Client Interaction CRM sign-in screen](docs/screenshots/sign-in.png)
+
+## Before you install
+
+The installer deploys the CRM into infrastructure owned by you.
+
+> **Before starting:** create a [Supabase account](https://supabase.com/) and a [Vercel account](https://vercel.com/). The installer will open browser sign-in for both services during setup.
+
+You will also need an internet connection, a web browser, and an email address for the first CRM user. Creating both accounts before launching setup makes the guided installation smoother.
+
+During setup, the launcher may download the local tools it needs to create and deploy your CRM. This can include a portable Node.js runtime (if a compatible Node.js installation is not already available) and pinned Supabase and Vercel CLI packages. These tools configure Supabase and deploy the application to Vercel.
+
+The launcher does not install Node.js globally or modify your global `PATH`. Launcher-managed npm/npx downloads use CRM-owned local storage and cache. First-time setup can take several minutes while these components are downloaded and prepared.
+
 ## Install on Windows
 
 1. Open the [v1.1.0 GitHub Release](https://github.com/Shadowez/client-interaction-crm/releases/tag/v1.1.0).
@@ -68,8 +90,6 @@ Local uninstall does **not** delete the Supabase project/database or Vercel proj
 - One Supabase project represents one trusted team; the application does not provide SaaS multitenancy or enterprise RBAC.
 
 ## Accounts, hosting, and cost
-
-Installation requires an internet connection, a browser, and Supabase and Vercel accounts.
 
 Supabase project allowances, inactivity behavior, and pricing can change. Check the current [Supabase pricing](https://supabase.com/pricing) and [billing documentation](https://supabase.com/docs/guides/platform/billing-on-supabase) before deploying.
 
