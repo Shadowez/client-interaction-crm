@@ -43,11 +43,14 @@ type app struct {
 	supabaseRun      func(context.Context, []string, commandOptions) (string, error)
 	vercelRun        func(context.Context, []string, commandOptions) (string, error)
 	browserOpen      func(context.Context, string) error
+	resuming         bool
+	requestedRoot    string
 }
 
 func main() {
 	verbose := flag.Bool("verbose", false, "show detailed command output")
 	showVersion := flag.Bool("version", false, "print launcher version")
+	installDir := flag.String("install-dir", "", "use a specific installation directory")
 	flag.Parse()
 	if *showVersion {
 		fmt.Printf("Client Interaction CRM Setup %s\n", version)
@@ -56,7 +59,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	a := &app{in: bufio.NewReader(os.Stdin), out: os.Stdout, verbose: *verbose}
+	a := &app{in: bufio.NewReader(os.Stdin), out: os.Stdout, verbose: *verbose, requestedRoot: *installDir}
 	if err := a.run(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "\nSetup stopped: %v\n", err)
 		if a.logFile != nil {
@@ -74,7 +77,29 @@ func (a *app) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	chosen, err := a.ask("Installation directory", defaultRoot)
+	chosen := ""
+	if strings.TrimSpace(a.requestedRoot) != "" {
+		chosen = a.requestedRoot
+		if validInstallDir(chosen) {
+			a.resuming = true
+			fmt.Fprintf(a.out, "\nPrepared Client Interaction CRM setup found: %s\n", chosen)
+			fmt.Fprintln(a.out, "Reusing the prepared application and saved non-secret setup state.")
+		}
+	} else if previous, previousErr := loadInstallPointer(); previousErr == nil && validInstallDir(previous) {
+		fmt.Fprintf(a.out, "\nPrevious Client Interaction CRM setup found: %s\n", previous)
+		resume, confirmErr := a.confirm("Resume this setup?", true)
+		if confirmErr != nil {
+			return confirmErr
+		}
+		if resume {
+			chosen = previous
+			a.resuming = true
+			fmt.Fprintf(a.out, "Reusing the prepared application and saved non-secret setup state in %s.\n", previous)
+		}
+	}
+	if chosen == "" {
+		chosen, err = a.ask("Installation directory", defaultRoot)
+	}
 	if err != nil {
 		return err
 	}
@@ -87,7 +112,7 @@ func (a *app) run(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Join(a.root, "logs"), 0o700); err != nil {
 		return fmt.Errorf("create installation directory: %w", err)
 	}
-	a.logFile, err = os.OpenFile(filepath.Join(a.root, "logs", "setup.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	a.logFile, err = openSetupLog(filepath.Join(a.root, "logs", "setup.log"))
 	if err != nil {
 		return fmt.Errorf("create setup log: %w", err)
 	}
@@ -97,6 +122,9 @@ func (a *app) run(ctx context.Context) error {
 
 	if err := a.step(ctx, 1, "Preparing application", a.prepare); err != nil {
 		return err
+	}
+	if err := saveInstallPointer(a.root); err != nil {
+		log.Printf("could not save last installation pointer: %v", err)
 	}
 	if err := a.step(ctx, 2, "Company branding", a.brand); err != nil {
 		return err
@@ -116,6 +144,12 @@ func (a *app) run(ctx context.Context) error {
 
 	fmt.Fprintf(a.out, "\nSetup complete.\n\nWeb address:\n%s\n\nCompany:\n%s\n\nLocal files:\n%s\n\nOpen your CRM and sign in using the user you just created or invited.\n", a.finalURL, displayCompany(a.company), a.root)
 	return nil
+}
+
+func openSetupLog(path string) (*os.File, error) {
+	// Keep diagnostics for this run only. This also removes sensitive material
+	// written by older launcher versions as soon as the corrected launcher runs.
+	return os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 }
 
 func (a *app) step(ctx context.Context, number int, title string, fn func(context.Context) error) error {

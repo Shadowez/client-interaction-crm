@@ -8,6 +8,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -26,53 +28,46 @@ type commandOptions struct {
 }
 
 func (a *app) command(ctx context.Context, executable string, args []string, options commandOptions) (string, error) {
-	// Arguments are always passed directly; user input is never evaluated by a shell.
-	cmd := exec.CommandContext(ctx, executable, args...)
+	// Node's Windows npm/npx launchers are batch files. Execute their JavaScript
+	// entry points with node.exe so paths and user input never cross cmd.exe.
+	actualExecutable, actualArgs := executableArgs(runtime.GOOS, executable, args)
+	cmd := exec.CommandContext(ctx, actualExecutable, actualArgs...)
 	cmd.Dir = a.appDir
 	cmd.Env = append(os.Environ(), options.env...)
 	var captured bytes.Buffer
 	var diagnostic bytes.Buffer
-	logWriter := io.Writer(a.logFile)
-	if a.verbose {
-		logWriter = io.MultiWriter(a.logFile, a.out)
-	}
 	if options.capture {
 		cmd.Stdout = &captured
-		if !options.sensitive {
-			cmd.Stdout = io.MultiWriter(&captured, a.logFile)
-		}
 	} else {
-		cmd.Stdout = logWriter
+		cmd.Stdout = &diagnostic
 	}
-	cmd.Stderr = logWriter
+	cmd.Stderr = &diagnostic
 	if options.interactive {
 		cmd.Stdin = os.Stdin
-		if !a.verbose {
-			cmd.Stdout = io.MultiWriter(a.out, a.logFile)
-			cmd.Stderr = io.MultiWriter(a.out, a.logFile)
-		}
+		// Authentication links and device codes must be visible live, but are
+		// deliberately never copied to the persistent troubleshooting log.
+		cmd.Stdout = a.out
+		cmd.Stderr = a.out
 	}
 	if options.stdin != "" {
 		cmd.Stdin = strings.NewReader(options.stdin)
 	}
-	log.Printf("run executable=%q args=%q", executable, redactArgs(args))
-	if len(options.secretValues) > 0 {
-		cmd.Stderr = &diagnostic
-	} else {
-		cmd.Stderr = io.MultiWriter(cmd.Stderr, &diagnostic)
-	}
+	log.Printf("run executable=%q args=%q", actualExecutable, redactArgs(actualArgs))
 	var err error
 	if options.progressMessage == "" || options.interactive {
 		err = cmd.Run()
 	} else {
 		err = a.runWithProgress(ctx, cmd, options)
 	}
-	if len(options.secretValues) > 0 && diagnostic.Len() > 0 {
+	if !options.interactive && diagnostic.Len() > 0 {
 		sanitized := redactText(diagnostic.String(), options.secretValues)
 		_, _ = io.WriteString(a.logFile, sanitized)
 		if a.verbose {
 			_, _ = io.WriteString(a.out, sanitized)
 		}
+	}
+	if options.capture && !options.sensitive && captured.Len() > 0 {
+		_, _ = io.WriteString(a.logFile, redactText(captured.String(), options.secretValues))
 	}
 	if err != nil {
 		return captured.String(), friendlyCommandError(executable, args, diagnostic.String()+"\n"+captured.String(), err)
@@ -86,7 +81,47 @@ func redactText(value string, secrets []string) string {
 			value = strings.ReplaceAll(value, secret, "<redacted>")
 		}
 	}
+	return redactAuthenticationMaterial(value)
+}
+
+var sensitiveLogPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)(https?://[^\s]*(?:session_id|token_name|public_key|code|token|secret)=[^\s&]+[^\s]*)`),
+	regexp.MustCompile(`(?i)((?:session_id|token_name|public_key|verification[_ -]?code|device[_ -]?code|access[_ -]?token|refresh[_ -]?token|management[_ -]?api[_ -]?token|oidc[_ -]?token|service[_ -]?role[_ -]?key|client[_ -]?secret)\s*[:=]\s*)[^\s,;]+`),
+	regexp.MustCompile(`\b(?:sb_secret_|sb_service_role_|eyJ)[A-Za-z0-9._~-]{12,}\b`),
+}
+
+func redactAuthenticationMaterial(value string) string {
+	for index, pattern := range sensitiveLogPatterns {
+		if index == 0 {
+			value = pattern.ReplaceAllString(value, "<redacted-auth-url>")
+		} else if index == 1 {
+			value = pattern.ReplaceAllString(value, "$1<redacted>")
+		} else {
+			value = pattern.ReplaceAllString(value, "<redacted>")
+		}
+	}
 	return value
+}
+
+func executableArgs(goos, executable string, args []string) (string, []string) {
+	if goos != "windows" || !strings.EqualFold(filepath.Ext(executable), ".cmd") {
+		return executable, append([]string(nil), args...)
+	}
+	separator := strings.LastIndexAny(executable, `/\`)
+	base := executable[separator+1:]
+	extension := filepath.Ext(base)
+	name := strings.ToLower(strings.TrimSuffix(base, extension))
+	if name != "npm" && name != "npx" {
+		return executable, append([]string(nil), args...)
+	}
+	bin := "."
+	if separator >= 0 {
+		bin = executable[:separator]
+	}
+	join := func(parts ...string) string { return strings.Join(parts, `\`) }
+	node := join(bin, "node.exe")
+	entrypoint := join(bin, "node_modules", "npm", "bin", name+"-cli.js")
+	return node, append([]string{entrypoint}, args...)
 }
 
 func (a *app) runWithProgress(ctx context.Context, cmd *exec.Cmd, options commandOptions) error {
@@ -170,6 +205,7 @@ func redactArgs(args []string) []string {
 				redactNext = true
 			}
 		}
+		result[i] = redactAuthenticationMaterial(result[i])
 	}
 	return result
 }

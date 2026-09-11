@@ -4,6 +4,7 @@ dist/
 dist-ssr/
 /installer/bin/
 /installer/dist/
+.tmp/
 /.crm-runtime/
 
 # Local environment files

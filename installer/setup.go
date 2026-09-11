@@ -35,6 +35,21 @@ func nodePathEnvironment(bin string) string {
 }
 
 func (a *app) brand(_ context.Context) error {
+	if a.resuming {
+		if existing, ok := readBranding(filepath.Join(a.appDir, "src", "config", "branding.json")); ok {
+			label := displayCompany(existing["organizationName"])
+			fmt.Fprintf(a.out, "Existing branding found: %s\n", label)
+			reuse, err := a.confirm("Reuse this branding?", true)
+			if err != nil {
+				return err
+			}
+			if reuse {
+				a.company = existing["organizationName"]
+				fmt.Fprintln(a.out, "Reusing the existing organization name and logo.")
+				return nil
+			}
+		}
+	}
 	company, err := a.ask("Organization / company name (optional)", "")
 	if err != nil {
 		return err
@@ -84,6 +99,19 @@ func (a *app) brand(_ context.Context) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(a.appDir, "src", "config", "branding.json"), append(data, '\n'), 0o644)
+}
+
+func readBranding(path string) (map[string]string, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	var config map[string]string
+	if json.Unmarshal(data, &config) != nil {
+		return nil, false
+	}
+	_, hasOrganization := config["organizationName"]
+	return config, hasOrganization
 }
 
 func ioCopy(destination *os.File, source *os.File) (int64, error) {

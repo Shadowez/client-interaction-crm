@@ -21,3 +21,39 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  launcher:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24.x"
+          cache-dependency-path: installer/go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Test launcher (includes native Windows npx.cmd regression)
+        working-directory: installer
+        run: go test ./...
+      - name: Vet launcher
+        working-directory: installer
+        run: go vet ./...
+      - name: Build launcher
+        working-directory: installer
+        run: go build ./...
+
+  launcher-race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24.x"
+          cache-dependency-path: installer/go.mod
+      - name: Race-test launcher
+        working-directory: installer
+        run: go test -race ./...
