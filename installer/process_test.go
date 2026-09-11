@@ -134,7 +134,7 @@ func TestNativeWindowsNpxShimExecution(t *testing.T) {
 
 func TestNPMAndNPXUseOnlyCRMOwnedPerProcessCache(t *testing.T) {
 	a := &app{npmCache: `C:\Users\test\AppData\Local\ClientInteractionCRM\npm-cache`}
-	for _, executable := range []string{`C:\Program Files\nodejs\npm.cmd`, `C:\Program Files\nodejs\npx.cmd`} {
+	for _, executable := range []string{"npm.cmd", "npx.cmd"} {
 		env := a.commandEnvironment(executable, []string{"EXISTING=1"})
 		if !containsString(env, `npm_config_cache=C:\Users\test\AppData\Local\ClientInteractionCRM\npm-cache`) {
 			t.Fatalf("CRM cache missing for %s: %#v", executable, env)
