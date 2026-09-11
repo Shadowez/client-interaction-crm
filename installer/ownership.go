@@ -103,17 +103,30 @@ func (a *app) installLifecycleFiles(ctx context.Context) error {
 }
 
 func (a *app) acquireUninstaller(ctx context.Context, destination string) error {
-	if local := strings.TrimSpace(os.Getenv("CRM_UNINSTALLER_FILE")); local != "" {
+	if local, enabled := localUninstallerOverride(os.Getenv); enabled {
 		if !filepath.IsAbs(local) {
 			return errorsNew("CRM_UNINSTALLER_FILE must be an absolute local file path")
 		}
-		checksumData, err := os.ReadFile(local + ".sha256")
+		info, err := os.Stat(local)
 		if err != nil {
-			return fmt.Errorf("read local CRM uninstaller checksum: %w", err)
+			return fmt.Errorf("open CRM_UNINSTALLER_FILE: %w", err)
 		}
-		expected, err := expectedChecksum(string(checksumData), filepath.Base(local))
-		if err != nil {
-			return err
+		if !info.Mode().IsRegular() {
+			return errorsNew("CRM_UNINSTALLER_FILE must identify a regular file")
+		}
+		expected := strings.TrimSpace(os.Getenv("CRM_UNINSTALLER_SHA256"))
+		if expected == "" {
+			checksumPath := local + ".sha256"
+			checksumData, readErr := os.ReadFile(checksumPath)
+			if readErr != nil {
+				return fmt.Errorf("read local CRM uninstaller checksum %s: %w", checksumPath, readErr)
+			}
+			expected, err = expectedChecksum(string(checksumData), filepath.Base(local))
+			if err != nil {
+				return err
+			}
+		} else if !validSHA256(expected) {
+			return errorsNew("CRM_UNINSTALLER_SHA256 must be exactly 64 hexadecimal characters")
 		}
 		if err := verifyChecksum(local, expected); err != nil {
 			return fmt.Errorf("local CRM uninstaller checksum verification failed: %w", err)
@@ -131,11 +144,11 @@ func (a *app) acquireUninstaller(ctx context.Context, destination string) error 
 	defer os.RemoveAll(temporary)
 	file := filepath.Join(temporary, uninstallerAsset)
 	checksum := file + ".sha256"
-	base := fmt.Sprintf("https://github.com/Shadowez/client-interaction-crm/releases/download/v%s/", version)
-	if err := download(ctx, base+uninstallerReleaseAsset, file); err != nil {
+	assetURL, checksumURL := releaseUninstallerURLs(version)
+	if err := download(ctx, assetURL, file); err != nil {
 		return fmt.Errorf("download CRM uninstaller: %w", err)
 	}
-	if err := download(ctx, base+uninstallerReleaseAsset+".sha256", checksum); err != nil {
+	if err := download(ctx, checksumURL, checksum); err != nil {
 		return fmt.Errorf("download CRM uninstaller checksum: %w", err)
 	}
 	data, err := os.ReadFile(checksum)
@@ -150,6 +163,16 @@ func (a *app) acquireUninstaller(ctx context.Context, destination string) error 
 		return fmt.Errorf("CRM uninstaller checksum verification failed: %w", err)
 	}
 	return copyLocalFile(file, destination)
+}
+
+func localUninstallerOverride(getenv func(string) string) (string, bool) {
+	path := strings.TrimSpace(getenv("CRM_UNINSTALLER_FILE"))
+	return path, path != ""
+}
+
+func releaseUninstallerURLs(releaseVersion string) (string, string) {
+	base := fmt.Sprintf("https://github.com/Shadowez/client-interaction-crm/releases/download/v%s/", releaseVersion)
+	return base + uninstallerReleaseAsset, base + uninstallerReleaseAsset + ".sha256"
 }
 
 func writeInstallManifest(manifest installManifest) error {

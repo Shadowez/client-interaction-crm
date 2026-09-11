@@ -63,6 +63,8 @@ CRM_PAYLOAD_SHA256="$(sha256sum installer/dist/client-interaction-crm-app-v1.1.0
 
 `CRM_PAYLOAD_FILE` must be an absolute path to a regular local file. A relative path, absent checksum, malformed archive, checksum mismatch, or archive traversal attempt stops setup before installation. `CRM_PAYLOAD_SHA256` alone does not activate the override.
 
+Private Windows acceptance can similarly set `CRM_UNINSTALLER_FILE` to the absolute path of the Actions-built standalone uninstaller. Its adjacent `.sha256` file is required unless `CRM_UNINSTALLER_SHA256` supplies the exact 64-character release checksum. These maintainer-only variables do not change normal public behavior: without them, setup downloads both versioned assets and their checksums from the GitHub Release without authentication.
+
 ## Linux manual acceptance test
 
 Use an x64 Linux account with no relevant CLI login. A preinstalled Node is optional and Git is not required.
