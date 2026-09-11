@@ -26,20 +26,20 @@ func TestParseReadyDeploymentAndCanonicalAlias(t *testing.T) {
 }
 
 func TestParseStructuredDeployResultDoesNotCaptureJSONQuote(t *testing.T) {
-	output := "Vercel CLI 59.15.1\nProduction https://perfectco-9qbagkpjg-alexeys-projects-6aaa5aab.vercel.app\n" + `{
+	output := "Vercel CLI 59.15.1\nProduction https://example-crm-build.example-team.vercel.app\n" + `{
   "status": "ok",
   "deployment": {
-    "id": "dpl_x8V9EHi31iyhpuPD5c4Reowgz3Eo",
-    "url": "https://perfectco-9qbagkpjg-alexeys-projects-6aaa5aab.vercel.app",
+	"id": "dpl_example_fixture_123456",
+	"url": "https://example-crm-build.example-team.vercel.app",
     "readyState": "READY"
   },
-  "next": [{"command":"vercel inspect https://perfectco-9qbagkpjg-alexeys-projects-6aaa5aab.vercel.app"}]
+  "next": [{"command":"vercel inspect https://example-crm-build.example-team.vercel.app"}]
 }`
 	result, err := parseVercelDeployResult(output)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.URL != "https://perfectco-9qbagkpjg-alexeys-projects-6aaa5aab.vercel.app" || result.ID != "dpl_x8V9EHi31iyhpuPD5c4Reowgz3Eo" || !result.Ready {
+	if result.URL != "https://example-crm-build.example-team.vercel.app" || result.ID != "dpl_example_fixture_123456" || !result.Ready {
 		t.Fatalf("deploy result %#v", result)
 	}
 	if strings.Contains(result.URL, `"`) {
