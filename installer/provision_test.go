@@ -24,6 +24,32 @@ func TestParseOrganizations(t *testing.T) {
 	}
 }
 
+func TestSupabaseCompleteResumeSkipsConfigurationAndContinuesAtVercel(t *testing.T) {
+	a := provisioningTestApp(t, "")
+	if err := os.MkdirAll(a.appDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a.project = project{ID: "existing-ref", Name: "NYDP CRM"}
+	if err := os.WriteFile(filepath.Join(a.appDir, ".env.local"), []byte("VITE_SUPABASE_URL=https://existing-ref.supabase.co\nVITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_existing\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	supabaseCalls := 0
+	a.supabaseRun = func(context.Context, []string, commandOptions) (string, error) {
+		supabaseCalls++
+		return "", errors.New("Supabase must not be called after completed boundary")
+	}
+	if err := a.configureSupabase(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if supabaseCalls != 0 {
+		t.Fatalf("Supabase configuration was repeated %d times", supabaseCalls)
+	}
+	state, err := a.loadState()
+	if err != nil || !state.SupabaseConfigured || state.Supabase.reference() != "existing-ref" {
+		t.Fatalf("resume state %#v, error %v", state, err)
+	}
+}
+
 func TestSelectOneOrganizationAutomatically(t *testing.T) {
 	a := provisioningTestApp(t, "")
 	a.supabaseRun = staticSupabase(`[ {"id":"org-one","name":"Only Organization"} ]`, nil)

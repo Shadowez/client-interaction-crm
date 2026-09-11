@@ -26,8 +26,19 @@ func (a *app) runVercel(ctx context.Context, args []string, options commandOptio
 		return a.vercelRun(ctx, args, options)
 	}
 	all := append([]string{"--yes", "vercel@" + vercelCLI}, args...)
-	options.env = append(options.env, nodePathEnvironment(filepath.Dir(a.node)))
+	options.env = append(options.env, vercelEnvironment(filepath.Dir(a.node), options.interactive)...)
 	return a.command(ctx, a.npx, all, options)
+}
+
+func vercelEnvironment(nodeBin string, interactive bool) []string {
+	env := []string{nodePathEnvironment(nodeBin), "NO_UPDATE_NOTIFIER=1"}
+	if !interactive {
+		// @vercel/detect-agent documents AI_AGENT as its supported agent marker.
+		// A distinct, unsupported agent name prevents Vercel from targeting a
+		// local Claude Code installation for plugin install/update prompts.
+		env = append(env, "AI_AGENT=client-interaction-crm-installer")
+	}
+	return env
 }
 
 func parseDeploymentMetadata(output string) (deploymentMetadata, error) {

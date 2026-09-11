@@ -25,6 +25,27 @@ func TestParseReadyDeploymentAndCanonicalAlias(t *testing.T) {
 	}
 }
 
+func TestVercelEnvironmentSuppressesUnrelatedUpdates(t *testing.T) {
+	nonInteractive := vercelEnvironment(`C:\runtime\node`, false)
+	if !containsString(nonInteractive, "NO_UPDATE_NOTIFIER=1") || !containsString(nonInteractive, "AI_AGENT=client-interaction-crm-installer") {
+		t.Fatalf("non-interactive Vercel environment %#v", nonInteractive)
+	}
+	interactive := vercelEnvironment(`C:\runtime\node`, true)
+	if !containsString(interactive, "NO_UPDATE_NOTIFIER=1") || containsString(interactive, "AI_AGENT=client-interaction-crm-installer") {
+		t.Fatalf("interactive login environment %#v", interactive)
+	}
+	if vercelCLI != "59.15.1" {
+		t.Fatalf("Vercel CLI pin changed to %q", vercelCLI)
+	}
+}
+
+func TestCancelledVercelLoginHasReadableReason(t *testing.T) {
+	err := friendlyCommandError("npx", []string{"--yes", "vercel@59.15.1", "login"}, "cancelled", errors.New("exit status 1"))
+	if !strings.Contains(err.Error(), "Vercel sign-in was cancelled") || !strings.Contains(err.Error(), "safely run") {
+		t.Fatalf("login error %q", err)
+	}
+}
+
 func TestCanonicalURLPrefersVerifiedCustomDomain(t *testing.T) {
 	aliases := []string{"project.vercel.app", "crm.example.com", "https://unique.vercel.app"}
 	if got := selectCanonicalURL("https://unique.vercel.app", aliases); got != "https://crm.example.com" {

@@ -25,26 +25,27 @@ const (
 var version = defaultVersion
 
 type app struct {
-	in               *bufio.Reader
-	out              io.Writer
-	verbose          bool
-	logFile          *os.File
-	root             string
-	appDir           string
-	runtime          string
-	node             string
-	npm              string
-	npx              string
-	company          string
-	project          project
-	databasePassword string
-	finalURL         string
-	deploymentURL    string
-	supabaseRun      func(context.Context, []string, commandOptions) (string, error)
-	vercelRun        func(context.Context, []string, commandOptions) (string, error)
-	browserOpen      func(context.Context, string) error
-	resuming         bool
-	requestedRoot    string
+	in                 *bufio.Reader
+	out                io.Writer
+	verbose            bool
+	logFile            *os.File
+	root               string
+	appDir             string
+	runtime            string
+	node               string
+	npm                string
+	npx                string
+	company            string
+	project            project
+	databasePassword   string
+	finalURL           string
+	deploymentURL      string
+	supabaseRun        func(context.Context, []string, commandOptions) (string, error)
+	vercelRun          func(context.Context, []string, commandOptions) (string, error)
+	browserOpen        func(context.Context, string) error
+	resuming           bool
+	supabaseConfigured bool
+	requestedRoot      string
 }
 
 func main() {
@@ -61,11 +62,26 @@ func main() {
 	defer stop()
 	a := &app{in: bufio.NewReader(os.Stdin), out: os.Stdout, verbose: *verbose, requestedRoot: *installDir}
 	if err := a.run(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "\nSetup stopped: %v\n", err)
+		logPath := ""
 		if a.logFile != nil {
-			fmt.Fprintf(os.Stderr, "Troubleshooting log: %s\n", a.logFile.Name())
+			logPath = a.logFile.Name()
 		}
+		reportSetupFailure(os.Stderr, a.in, runtime.GOOS, err, logPath)
 		os.Exit(1)
+	}
+}
+
+func reportSetupFailure(out io.Writer, in *bufio.Reader, goos string, err error, logPath string) {
+	fmt.Fprintf(out, "\nSetup could not continue.\nReason: %v\n", err)
+	if logPath != "" {
+		fmt.Fprintf(out, "Troubleshooting log: %s\n", logPath)
+	}
+	fmt.Fprintln(out, "You can safely run setup again to resume.")
+	if goos == "windows" {
+		fmt.Fprint(out, "Press Enter to close.")
+		if in != nil {
+			_, _ = in.ReadString('\n')
+		}
 	}
 }
 

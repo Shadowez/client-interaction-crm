@@ -3,7 +3,9 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -17,6 +19,21 @@ func TestCompatibleNode(t *testing.T) {
 		if got := compatibleNode(input); got != want {
 			t.Errorf("compatibleNode(%q)=%v want %v", input, got, want)
 		}
+	}
+}
+
+func TestFailureWindowIsReadableAndWindowsWaits(t *testing.T) {
+	output := &bytes.Buffer{}
+	reportSetupFailure(output, bufio.NewReader(strings.NewReader("\n")), "windows", errors.New("Vercel sign-in was cancelled"), `E:\CRM\logs\setup.log`)
+	for _, expected := range []string{"Setup could not continue.", "Reason: Vercel sign-in was cancelled", `Troubleshooting log: E:\CRM\logs\setup.log`, "safely run setup again", "Press Enter to close."} {
+		if !strings.Contains(output.String(), expected) {
+			t.Fatalf("failure window missing %q: %q", expected, output.String())
+		}
+	}
+	linux := &bytes.Buffer{}
+	reportSetupFailure(linux, nil, "linux", errors.New("failed"), "")
+	if strings.Contains(linux.String(), "Press Enter") {
+		t.Fatalf("Linux failure output should not pause: %q", linux.String())
 	}
 }
 
