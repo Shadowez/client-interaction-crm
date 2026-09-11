@@ -40,6 +40,8 @@ type app struct {
 	databasePassword   string
 	finalURL           string
 	deploymentURL      string
+	deploymentID       string
+	deploymentReady    bool
 	supabaseRun        func(context.Context, []string, commandOptions) (string, error)
 	vercelRun          func(context.Context, []string, commandOptions) (string, error)
 	browserOpen        func(context.Context, string) error

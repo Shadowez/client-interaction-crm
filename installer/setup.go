@@ -23,6 +23,9 @@ type setupState struct {
 	Supabase           project `json:"supabase_project"`
 	SupabaseConfigured bool    `json:"supabase_configured,omitempty"`
 	VercelURL          string  `json:"vercel_url,omitempty"`
+	DeploymentURL      string  `json:"deployment_url,omitempty"`
+	DeploymentID       string  `json:"deployment_id,omitempty"`
+	DeploymentReady    bool    `json:"deployment_ready,omitempty"`
 }
 
 func (p project) reference() string {
@@ -144,6 +147,10 @@ func (a *app) connectSupabase(ctx context.Context) error {
 				fmt.Fprintf(a.out, "Resuming with the previously selected dedicated Supabase project %s.\n", candidate.Name)
 				a.project = candidate
 				a.supabaseConfigured = saved.SupabaseConfigured || a.hasConfiguredSupabase(candidate.reference())
+				a.finalURL = saved.VercelURL
+				a.deploymentURL = normalizeWebURL(saved.DeploymentURL)
+				a.deploymentID = saved.DeploymentID
+				a.deploymentReady = saved.DeploymentReady && a.deploymentURL != ""
 				return nil
 			}
 		}
@@ -350,33 +357,45 @@ func (a *app) connectVercel(ctx context.Context) error {
 
 func (a *app) deploy(ctx context.Context) error {
 	projectName := vercelProjectName(displayCompany(a.company))
-	fmt.Fprintln(a.out, "Creating or reusing the Vercel project for this CRM…")
-	if _, err := a.runVercel(ctx, []string{"link", "--yes", "--project", projectName}, commandOptions{progressMessage: "Still preparing the Vercel project…"}); err != nil {
-		return err
-	}
-	envData, err := os.ReadFile(filepath.Join(a.appDir, ".env.local"))
-	if err != nil {
-		return err
-	}
-	values := parseEnv(string(envData))
-	for _, name := range []string{"VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY"} {
-		value := values[name]
-		if value == "" {
-			return fmt.Errorf("missing %s", name)
-		}
-		if _, err := a.runVercel(ctx, []string{"env", "add", name, "production", "--force"}, commandOptions{stdin: value + "\n"}); err != nil {
+	if a.deploymentReady && a.deploymentURL != "" {
+		fmt.Fprintf(a.out, "Resuming verification of the successful Vercel production deployment %s.\n", a.deploymentURL)
+		log.Printf("vercel deployment: reusing saved ready deployment id=%q url=%q", a.deploymentID, a.deploymentURL)
+	} else {
+		fmt.Fprintln(a.out, "Creating or reusing the Vercel project for this CRM…")
+		if _, err := a.runVercel(ctx, []string{"link", "--yes", "--project", projectName}, commandOptions{progressMessage: "Still preparing the Vercel project…"}); err != nil {
 			return err
 		}
-	}
-	fmt.Fprintln(a.out, "Deploying the CRM web interface. This can take several minutes.")
-	args := []string{"deploy", "--prod", "--yes"}
-	out, err := a.runVercel(ctx, args, commandOptions{capture: true, progressMessage: "Still deploying the CRM web interface…"})
-	if err != nil {
-		return err
-	}
-	a.deploymentURL = lastHTTPSURL(out)
-	if a.deploymentURL == "" {
-		return fmt.Errorf("Vercel deployment completed without a production URL")
+		envData, err := os.ReadFile(filepath.Join(a.appDir, ".env.local"))
+		if err != nil {
+			return err
+		}
+		values := parseEnv(string(envData))
+		for _, name := range []string{"VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY"} {
+			value := values[name]
+			if value == "" {
+				return fmt.Errorf("missing %s", name)
+			}
+			if _, err := a.runVercel(ctx, []string{"env", "add", name, "production", "--force"}, commandOptions{stdin: value + "\n"}); err != nil {
+				return err
+			}
+		}
+		fmt.Fprintln(a.out, "Deploying the CRM web interface. This can take several minutes.")
+		out, err := a.runVercel(ctx, []string{"deploy", "--prod", "--yes"}, commandOptions{capture: true, progressMessage: "Still deploying the CRM web interface…"})
+		if err != nil {
+			return err
+		}
+		result, parseErr := parseVercelDeployResult(out)
+		if parseErr != nil {
+			return parseErr
+		}
+		a.deploymentURL = result.URL
+		a.deploymentID = result.ID
+		a.deploymentReady = result.Ready
+		// Persist the successful deployment before the separate inspection step,
+		// so an interrupted verification resumes without another deployment.
+		if err := a.saveState(); err != nil {
+			return err
+		}
 	}
 	fmt.Fprintln(a.out, "Verifying that the production deployment is ready…")
 	inspectOutput, err := a.runVercel(ctx, deploymentInspectArgs(a.deploymentURL), commandOptions{capture: true, progressMessage: "Still waiting for Vercel to finish the deployment…"})
@@ -450,7 +469,10 @@ func (a *app) loadState() (setupState, error) {
 }
 
 func (a *app) saveState() error {
-	state := setupState{Version: version, Supabase: a.project, SupabaseConfigured: a.supabaseConfigured, VercelURL: a.finalURL}
+	state := setupState{
+		Version: version, Supabase: a.project, SupabaseConfigured: a.supabaseConfigured,
+		VercelURL: a.finalURL, DeploymentURL: a.deploymentURL, DeploymentID: a.deploymentID, DeploymentReady: a.deploymentReady,
+	}
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
@@ -482,12 +504,12 @@ func vercelProjectName(value string) string {
 }
 
 func lastHTTPSURL(value string) string {
-	re := regexp.MustCompile(`https://[^\s]+`)
+	re := regexp.MustCompile(`https://[^\s"'<>\\]+`)
 	matches := re.FindAllString(value, -1)
 	if len(matches) == 0 {
 		return ""
 	}
-	return strings.TrimRight(matches[len(matches)-1], ").,;")
+	return normalizeWebURL(strings.TrimRight(matches[len(matches)-1], ").,;]}"))
 }
 
 func writeAuthConfig(path, siteURL string) error {

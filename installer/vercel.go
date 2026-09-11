@@ -17,6 +17,44 @@ type deploymentMetadata struct {
 	Aliases []string
 }
 
+type vercelDeployResult struct {
+	ID    string
+	URL   string
+	Ready bool
+}
+
+func parseVercelDeployResult(output string) (vercelDeployResult, error) {
+	// Agent-mode Vercel output may contain human-readable progress followed by
+	// a JSON result. Decode only an object with the explicit deployment fields.
+	for offset := 0; offset < len(output); {
+		relative := strings.IndexByte(output[offset:], '{')
+		if relative < 0 {
+			break
+		}
+		start := offset + relative
+		var payload struct {
+			Deployment struct {
+				ID         string `json:"id"`
+				URL        string `json:"url"`
+				ReadyState string `json:"readyState"`
+			} `json:"deployment"`
+		}
+		decoder := json.NewDecoder(strings.NewReader(output[start:]))
+		if err := decoder.Decode(&payload); err == nil && payload.Deployment.URL != "" {
+			url := normalizeWebURL(payload.Deployment.URL)
+			if url == "" {
+				return vercelDeployResult{}, fmt.Errorf("Vercel returned an invalid deployment URL")
+			}
+			return vercelDeployResult{ID: payload.Deployment.ID, URL: url, Ready: strings.EqualFold(payload.Deployment.ReadyState, "READY")}, nil
+		}
+		offset = start + 1
+	}
+	if url := lastHTTPSURL(output); url != "" {
+		return vercelDeployResult{URL: url}, nil
+	}
+	return vercelDeployResult{}, fmt.Errorf("Vercel deployment completed without a production URL")
+}
+
 func deploymentInspectArgs(deploymentURL string) []string {
 	return []string{"inspect", deploymentURL, "--wait", "--timeout", "10m", "--json"}
 }

@@ -25,6 +25,35 @@ func TestParseReadyDeploymentAndCanonicalAlias(t *testing.T) {
 	}
 }
 
+func TestParseStructuredDeployResultDoesNotCaptureJSONQuote(t *testing.T) {
+	output := "Vercel CLI 59.15.1\nProduction https://perfectco-9qbagkpjg-alexeys-projects-6aaa5aab.vercel.app\n" + `{
+  "status": "ok",
+  "deployment": {
+    "id": "dpl_x8V9EHi31iyhpuPD5c4Reowgz3Eo",
+    "url": "https://perfectco-9qbagkpjg-alexeys-projects-6aaa5aab.vercel.app",
+    "readyState": "READY"
+  },
+  "next": [{"command":"vercel inspect https://perfectco-9qbagkpjg-alexeys-projects-6aaa5aab.vercel.app"}]
+}`
+	result, err := parseVercelDeployResult(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.URL != "https://perfectco-9qbagkpjg-alexeys-projects-6aaa5aab.vercel.app" || result.ID != "dpl_x8V9EHi31iyhpuPD5c4Reowgz3Eo" || !result.Ready {
+		t.Fatalf("deploy result %#v", result)
+	}
+	if strings.Contains(result.URL, `"`) {
+		t.Fatalf("deployment URL contains JSON delimiter: %q", result.URL)
+	}
+}
+
+func TestHumanDeployFallbackStopsAtStructuredDelimiters(t *testing.T) {
+	result, err := parseVercelDeployResult(`result "https://fallback.vercel.app"`)
+	if err != nil || result.URL != "https://fallback.vercel.app" {
+		t.Fatalf("fallback result %#v, error %v", result, err)
+	}
+}
+
 func TestVercelEnvironmentSuppressesUnrelatedUpdates(t *testing.T) {
 	nonInteractive := vercelEnvironment(`C:\runtime\node`, false)
 	if !containsString(nonInteractive, "NO_UPDATE_NOTIFIER=1") || !containsString(nonInteractive, "AI_AGENT=client-interaction-crm-installer") {
@@ -154,6 +183,40 @@ func TestDeployWaitsAndUsesCanonicalAlias(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "One final account step") || strings.Contains(output.String(), "Continue after creating") {
 		t.Fatalf("first-user UX output %q", output)
+	}
+}
+
+func TestReadyDeploymentResumeDoesNotDeployAgain(t *testing.T) {
+	root := t.TempDir()
+	appDir := filepath.Join(root, "app")
+	if err := os.MkdirAll(filepath.Join(appDir, "supabase"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := &app{
+		in: bufio.NewReader(strings.NewReader("\n")), out: &bytes.Buffer{}, root: root, appDir: appDir,
+		project: project{ID: "supabase-ref"}, deploymentID: "dpl_existing",
+		deploymentURL: "https://perfectco-existing.vercel.app", deploymentReady: true,
+		browserOpen: func(context.Context, string) error { return nil },
+	}
+	var calls [][]string
+	a.vercelRun = func(_ context.Context, args []string, _ commandOptions) (string, error) {
+		calls = append(calls, append([]string(nil), args...))
+		if args[0] == "inspect" {
+			return `{"id":"dpl_existing","readyState":"READY","aliases":["perfectco.vercel.app"]}`, nil
+		}
+		return "", fmt.Errorf("unexpected Vercel mutation: %v", args)
+	}
+	a.supabaseRun = func(context.Context, []string, commandOptions) (string, error) { return "", nil }
+	if err := a.deploy(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range calls {
+		if call[0] == "deploy" || call[0] == "link" || call[0] == "env" {
+			t.Fatalf("resume repeated Vercel mutation: %#v", calls)
+		}
+	}
+	if a.finalURL != "https://perfectco.vercel.app" {
+		t.Fatalf("final URL %q", a.finalURL)
 	}
 }
 
